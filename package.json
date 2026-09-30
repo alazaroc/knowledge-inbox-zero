@@ -1,0 +1,73 @@
+{
+  "name": "serverless-monorepo-aws-starter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless monorepo starter on AWS (React + Vite + CDK + Cognito).",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "shared",
+    "frontend",
+    "backend",
+    "infra/cdk"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w shared",
+    "build:frontend": "npm run build -w frontend",
+    "build:backend": "npm run build -w backend",
+    "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "dev": "npm run dev -w frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "lint:css": "stylelint \"**/*.css\" --ignore-path .prettierignore",
+    "lint:css:fix": "stylelint \"**/*.css\" --ignore-path .prettierignore --fix",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "quality:check": "npm run build:shared && npm run lint && npm run lint:css && npm run typecheck && npm run format:check",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "fix": "npm run lint:fix && npm run lint:css:fix && npm run format",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "validate": "npm run quality:check && npm run test",
+    "prepare": "husky",
+    "deploy:test": "ENV=test ./scripts/deploy.sh",
+    "deploy:prod": "ENV=prod ./scripts/deploy.sh",
+    "deploy:backend:test": "ENV=test ./scripts/deploy.sh backend",
+    "deploy:backend:prod": "ENV=prod ./scripts/deploy.sh backend",
+    "deploy:frontend:test": "ENV=test ./scripts/deploy.sh frontend",
+    "deploy:frontend:prod": "ENV=prod ./scripts/deploy.sh frontend"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.8.3",
+    "stylelint": "^17.9.0",
+    "stylelint-config-standard": "^40.0.0",
+    "typescript": "^5.4.0"
+  },
+  "author": "Alejandro Lazaro Chueca",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alazaroc/serverless-monorepo-aws-starter.git"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx}": [
+      "eslint --fix --config frontend/eslint.config.js",
+      "prettier --write"
+    ],
+    "backend/**/*.ts": [
+      "eslint --fix --config backend/eslint.config.js",
+      "prettier --write"
+    ],
+    "*.{js,jsx,json,md,css}": [
+      "prettier --write"
+    ],
+    "infra/**/*.ts": [
+      "prettier --write"
+    ],
+    "shared/**/*.ts": [
+      "prettier --write"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.js.map
+cdk.out/
+.cdk.staging/
+coverage/
+.deploy-hashes/
+.DS_Store
+
+# TypeScript build artifacts
+*.tsbuildinfo

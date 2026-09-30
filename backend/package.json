@@ -1,0 +1,45 @@
+{
+  "name": "@app/backend",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest --runInBand --passWithNoTests",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@app/shared": "*",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1068.0",
+    "@aws-sdk/client-dynamodb": "^3.1066.0",
+    "@aws-sdk/lib-dynamodb": "^3.1066.0",
+    "aws-jwt-verify": "^5.2.1",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.5.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.59.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
+    "moduleNameMapper": {
+      "^@app/shared$": "<rootDir>/../shared/src/index.ts",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
+  }
+}

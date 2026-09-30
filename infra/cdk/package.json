@@ -1,0 +1,24 @@
+{
+  "name": "@app/infra",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "cdk": "cdk",
+    "deploy:test": "cdk deploy --all --context env=test --require-approval never",
+    "deploy:prod": "cdk deploy --all --context env=prod"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.258.1",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/source-map-support": "^0.5.10",
+    "aws-cdk": "^2.1126.0",
+    "esbuild": "^0.25.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  }
+}

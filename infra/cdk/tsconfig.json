@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "cdk.out/ts",
+    "module": "commonjs",
+    "lib": ["ES2020"]
+  },
+  "include": ["lib", "bin"]
+}
