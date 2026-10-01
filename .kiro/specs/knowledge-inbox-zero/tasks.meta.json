@@ -1,0 +1,738 @@
+{
+  "pbtResults": {
+    "2.3 Property tests for canonicalization + document id": {
+      "status": "passed",
+      "note": "Property 2 (idempotent canonicalization) initially failed on the counterexample \"http://a.aa///\": shared/src/url.ts normalized the trailing slash with a single `slice(0, -1)`, so a path with multiple trailing slashes lost only one slash per pass and was not idempotent — a bug in the canonicalizer (task 2.2), not in the test. Fixed in shared/src/url.ts by collapsing repeated slashes in one pass (`pathname.replace(/\\/{2,}/g, '/')`) before stripping a single trailing slash. Property 2 and all 7 canonicalization/document-id property tests now pass.",
+      "lastRunTimestamp": 1790900000000
+    },
+    "6.6 Property test for batch count conservation": {
+      "status": "passed",
+      "lastRunTimestamp": 1790819214804
+    }
+  },
+  "executionHistory": {
+    "1.1 Add domain constants to `shared/src/constants.ts`": [
+      {
+        "executionId": "327df7e1-40c4-4005-9c80-666b3761db0a",
+        "chatSessionId": "sess_da5314fe-f5fb-4de4-a8db-98806f775de1",
+        "timestamp": 1790812360885
+      },
+      {
+        "executionId": "327df7e1-40c4-4005-9c80-666b3761db0a",
+        "chatSessionId": "sess_da5314fe-f5fb-4de4-a8db-98806f775de1",
+        "timestamp": 1790812460754
+      }
+    ],
+    "1.2 Add domain interfaces to `shared/src/types.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812557134
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812632494
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812734724
+      }
+    ],
+    "1.3 Add Zod schemas to `shared/src/schemas.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812561288
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812634053
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812736510
+      }
+    ],
+    "1.4 Re-export new symbols from `shared/src/index.ts` and build shared": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812567319
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812806955
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813115766
+      }
+    ],
+    "2.1 Add `fast-check` as a backend dev dependency": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812570547
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812810793
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813113699
+      }
+    ],
+    "2.2 Implement URL canonicalization in `shared/src/url.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812574367
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813189186
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813380720
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813712353
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813813148
+      }
+    ],
+    "2.5 Implement MKV scoring in `shared/src/scoring.ts` (or `backend/src/lib/scoring.ts`)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812577983
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813193704
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813379259
+      }
+    ],
+    "3. Checkpoint — pure core green": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812580484
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814256473
+      }
+    ],
+    "4.1 Implement `backend/src/handlers/profile.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812582732
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814338015
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814792098
+      }
+    ],
+    "4.3 Add the `profiles` table to `storage-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812584032
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814343079
+      }
+    ],
+    "4.4 Wire `profileFn` + routes + grants in `api-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812585745
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814862365
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790815497142
+      }
+    ],
+    "4.5 Frontend Profile page": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812587891
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814865183
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790815499817
+      }
+    ],
+    "5.1 Implement `backend/src/handlers/imports.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812590985
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790815572787
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816178751
+      }
+    ],
+    "5.3 Add `batches` + `documents` tables and content S3 bucket to `storage-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812591911
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790815569060
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816180966
+      }
+    ],
+    "5.4 Add SQS analysis queue + DLQ and wire `importsFn` in `api-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812593354
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816258155
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816609950
+      }
+    ],
+    "5.5 Frontend Add Content page + batch progress polling": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812595140
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816266512
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816606981
+      }
+    ],
+    "6.1 Add justified retrieval dependencies": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812597061
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816693801
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817247178
+      }
+    ],
+    "6.2 Implement content retrieval + readability helper": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812600257
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817331672
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817694965
+      }
+    ],
+    "6.3 Implement Bedrock extraction + explanation helpers": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812601759
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817330072
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817694109
+      }
+    ],
+    "6.4 Implement `backend/src/handlers/analysis-worker.ts` pipeline": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812603821
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817763158
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818367719
+      }
+    ],
+    "6.5 Wire `analysisWorkerFn` in `api-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812606281
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818435091
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818625559
+      }
+    ],
+    "7. Checkpoint — async pipeline green": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812608281
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820115584
+      }
+    ],
+    "8.1 Implement `backend/src/handlers/documents.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812609455
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820193088
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820573713
+      }
+    ],
+    "8.3 Wire `documentsFn` + routes + grants in `api-stack.ts`": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812610999
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820642314
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820908393
+      }
+    ],
+    "8.4 Frontend Library page": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812613205
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820978317
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821213324
+      }
+    ],
+    "8.5 Frontend Document Detail page": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812614718
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820976142
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821214019
+      }
+    ],
+    "9.1 Add clearly-synthetic example data and gitignore guard": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812616251
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821286347
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839256555
+      }
+    ],
+    "10.1 Add repo-convention + cost-guardrail steering file": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812617883
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821287840
+      }
+    ],
+    "11.1 Remove the example `items`/`shares` domain": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812620046
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839355432
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790843542697
+      }
+    ],
+    "12. Final checkpoint": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790812621848
+      }
+    ],
+    "1. Foundation: extend `@app/shared` with domain constants, types, and schemas": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813118394
+      }
+    ],
+    "2.3 Property tests for canonicalization + document id": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813461750
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813815380
+      }
+    ],
+    "2.7 Property tests for novelty/redundancy invariants": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813463692
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813816988
+      }
+    ],
+    "2.6 Property tests for scoring bounds and monotonicity": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813467588
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813811851
+      }
+    ],
+    "2.8 Property tests for freshness and recommendation state": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813470752
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813821566
+      }
+    ],
+    "2.4 Golden/edge unit tests for canonicalization": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813473510
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813819349
+      }
+    ],
+    "2. Pure deterministic core in `@app/shared` (test-first with fast-check)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813824371
+      }
+    ],
+    "2.9 Example/edge unit tests for state mapping and Zod bounds": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790813901614
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814180683
+      }
+    ],
+    "4.2 Unit tests for profile handler": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790814868291
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790815498134
+      }
+    ],
+    "5.2 Unit/property tests for import line partition": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816260308
+      }
+    ],
+    "5.6 Integration test for async boundary": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790816686370
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817245881
+      }
+    ],
+    "5. Imports + async skeleton vertical slice (end-to-end, deployable)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790817250335
+      }
+    ],
+    "6. Analysis worker vertical slice (end-to-end, deployable)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818627310
+      }
+    ],
+    "6.6 Property test for batch count conservation": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818698319
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820033025
+      }
+    ],
+    "6.7 Unit tests for worker degradation, truncation, and S3 offload": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818700981
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820030380
+      }
+    ],
+    "6.9 CDK assertions (Template.fromStack)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818704552
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820043346
+      }
+    ],
+    "6.8 Integration test for resilience + batch finish": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790818706044
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820038961
+      }
+    ],
+    "8.2 Property/round-trip tests for library and persistence": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820643871
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790820909245
+      }
+    ],
+    "8.6 Frontend Library/Detail tests (Vitest + Testing Library)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821285435
+      }
+    ],
+    "10.2 Add hooks for tests-on-save and personal-data pre-commit guard": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790821289681
+      },
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839260015
+      }
+    ],
+    "10. Kiro capabilities (genuine fits only)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839262551
+      }
+    ],
+    "8. Library + document detail vertical slice (end-to-end, deployable)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839267400
+      }
+    ],
+    "9. Privacy and demo data": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790839271966
+      }
+    ],
+    "11. Migration cleanup (LATE — only after the new domain ships green)": [
+      {
+        "executionId": "c4fff91a-d228-40a1-b5c6-cd06bfac5cf8",
+        "chatSessionId": "sess_66b76068-2ec1-4a57-93e3-bcb1d3c25b8d",
+        "timestamp": 1790843546402
+      }
+    ]
+  }
+}

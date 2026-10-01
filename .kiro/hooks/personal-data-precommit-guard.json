@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Personal Data Pre-Commit Guard",
+      "trigger": "PreToolUse",
+      "matcher": "execute|bash|shell|pwsh|command|terminal",
+      "description": "Enforces NFR-3.2 (the repository must never contain real personal data). Before a tool runs a `git commit`, it inspects the staged files and blocks the commit (exit 2) if any staged path matches the personal-data patterns: *.personal.json, *.private.json, anything under personal-data/, profile-data/ or private/, or files named like profile-history / url-history. Clearly-marked demo data (examples/*, *.sample.*, *.example.*) is allowed. If the tool call is not a git commit the guard is a no-op and the action proceeds.",
+      "action": {
+        "type": "command",
+        "command": "node .kiro/hooks/scripts/personal-data-guard.mjs"
+      }
+    }
+  ]
+}

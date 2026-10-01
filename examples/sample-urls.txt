@@ -1,0 +1,7 @@
+https://developer.mozilla.org/en-US/docs/Web/JavaScript
+https://docs.aws.amazon.com/lambda/latest/dg/welcome.html
+https://nodejs.org/en/docs
+https://www.typescriptlang.org/docs/
+https://react.dev/learn
+https://docs.aws.amazon.com/dynamodb/
+https://vite.dev/guide/

@@ -19,7 +19,7 @@ MINS ?= 30
 TYPE ?= all   # all | errors
 
 # Base names of the Lambdas (functionName = $(PROJECT)-<base>-$(ENV))
-LAMBDAS := items shares users
+LAMBDAS := profile imports documents analysis-worker users
 
 .DEFAULT_GOAL := help
 .PHONY: help install dev dev-env build build-shared \
@@ -40,9 +40,9 @@ help:
 
 # ── Development ──────────────────────────────────────────────────────────────
 
-## install: install dependencies (npm workspaces)
+## install: install dependencies from the lockfile (clean, reproducible)
 install:
-	npm install
+	npm ci
 
 ## dev: run the frontend locally (Vite, reads frontend/.env — no AWS credentials)
 dev:

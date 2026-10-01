@@ -42,7 +42,7 @@ const storageStack = new StorageStack(app, naming.standard('storage'), {
   env: stackEnv,
   naming,
   tags: naming.withType('backend'),
-  description: 'DynamoDB tables (users, items, shares).',
+  description: 'DynamoDB tables (users, profiles, batches, documents).',
 });
 
 const authStack = new AuthStack(app, naming.standard('auth'), {

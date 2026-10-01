@@ -1,21 +1,41 @@
 import { z } from 'zod';
-import { ITEM_STATUS, ROLES, SHARE_PERMISSION } from './constants.js';
+import { RECOMMENDATION_STATE, ROLES } from './constants.js';
 
-// Helpers
-const shortText = z.string().min(1).max(200);
-const longText = z.string().max(5000).optional();
+// Profile list entries: trim, drop empties (Req 1.7), cap length/count (Req 1.8).
+const trimmedEntry = z.string().transform((s) => s.trim());
+const entryList = z
+  .array(trimmedEntry)
+  .transform((arr) => arr.filter((s) => s.length > 0)) // Req 1.7 drop empties
+  .refine((arr) => arr.length <= 100, { message: 'At most 100 entries' }) // Req 1.8
+  .refine((arr) => arr.every((s) => s.length <= 200), { message: 'Entry exceeds 200 chars' });
 
-// ---------- Item (example entity) ----------
-export const itemCreateSchema = z.object({
-  name: shortText,
-  description: longText,
-  status: z.enum(ITEM_STATUS).default('ACTIVE'),
+// ---------- Knowledge Inbox Zero domain ----------
+
+// Profile: replace-all semantics; trims entries, drops empties, enforces bounds.
+export const profileSchema = z.object({
+  highInterests: entryList.default([]),
+  mediumInterests: entryList.default([]),
+  currentlyResearching: entryList.default([]),
+  alreadyKnown: entryList.default([]),
+  avoidContentTypes: entryList.default([]),
+  context: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s.length <= 5000, {
+      message: 'context exceeds 5000 characters', // Req 1.5
+    })
+    .optional(),
 });
-export const itemUpdateSchema = itemCreateSchema.partial();
 
-export const itemShareSchema = z.object({
-  userId: z.string().min(1),
-  permission: z.enum(SHARE_PERMISSION),
+// Imports: raw pasted blob; the handler splits/normalizes lines (Req 2.1).
+export const importCreateSchema = z.object({
+  urls: z.string().min(1),
+});
+
+// Library query: optional state filter (Req 7.5 invalid → 400) + pagination cursor.
+export const libraryQuerySchema = z.object({
+  state: z.enum(RECOMMENDATION_STATE).optional(),
+  cursor: z.string().optional(),
 });
 
 // ---------- Users (admin management) ----------
@@ -37,8 +57,8 @@ export const adminUpdateUserSchema = z
   });
 
 // Inferred types
-export type ItemCreateInput = z.infer<typeof itemCreateSchema>;
-export type ItemUpdateInput = z.infer<typeof itemUpdateSchema>;
-export type ItemShareInput = z.infer<typeof itemShareSchema>;
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
 export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
+export type ProfileInput = z.input<typeof profileSchema>;
+export type ImportCreateInput = z.input<typeof importCreateSchema>;
+export type LibraryQueryInput = z.input<typeof libraryQuerySchema>;

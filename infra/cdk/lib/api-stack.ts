@@ -6,6 +6,9 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as eventsources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
@@ -16,6 +19,12 @@ interface ApiStackProps extends cdk.StackProps {
   naming: ResourceNaming;
 }
 
+// Bedrock foundation model for extraction + explanation (NFR-1.2). Single
+// provider, single configurable model id; env-overridable with a sensible
+// default so a redeploy can switch models without a code change.
+const BEDROCK_MODEL_ID =
+  process.env.BEDROCK_MODEL_ID ?? 'anthropic.claude-3-5-sonnet-20240620-v1:0';
+
 export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -23,8 +32,9 @@ export class ApiStack extends cdk.Stack {
 
     const tableNames = {
       users: naming.standard('users'),
-      items: naming.standard('items'),
-      shares: naming.standard('shares'),
+      profiles: naming.standard('profiles'),
+      batches: naming.standard('batches'),
+      documents: naming.standard('documents'),
     };
 
     const userPoolId = ssm.StringParameter.valueForStringParameter(
@@ -51,16 +61,40 @@ export class ApiStack extends cdk.Stack {
       dynamodb.Table.fromTableName(this, logicalId, name);
     const tables = {
       users: table('Users', tableNames.users),
-      items: table('Items', tableNames.items),
-      shares: table('Shares', tableNames.shares),
+      profiles: table('Profiles', tableNames.profiles),
+      batches: table('Batches', tableNames.batches),
+      documents: table('Documents', tableNames.documents),
     };
+
+    // Private content bucket (created in the storage stack). Referenced by name,
+    // matching the cross-stack pattern used for the tables above.
+    const contentBucket = s3.Bucket.fromBucketName(
+      this,
+      'ContentBucket',
+      naming.standard('content')
+    );
+
+    // ── SQS: async analysis pipeline (imports enqueue, worker consumes). ──────
+    // DLQ retains poison messages after maxReceiveCount redrives (Req 3.7).
+    const analysisDlq = new sqs.Queue(this, 'AnalysisDlq', {
+      queueName: naming.standard('analysis-dlq'),
+      retentionPeriod: cdk.Duration.days(14),
+    });
+    // Visibility timeout ≥ 6× the 120s worker timeout (720s) per AWS guidance (Req 3.7).
+    const analysisQueue = new sqs.Queue(this, 'AnalysisQueue', {
+      queueName: naming.standard('analysis'),
+      visibilityTimeout: cdk.Duration.seconds(720),
+      deadLetterQueue: { maxReceiveCount: 3, queue: analysisDlq },
+    });
 
     const commonEnv = {
       COGNITO_USER_POOL_ID: userPoolId,
       COGNITO_CLIENT_ID: userPoolClientId,
       TABLE_USERS: tableNames.users,
-      TABLE_ITEMS: tableNames.items,
-      TABLE_SHARES: tableNames.shares,
+      TABLE_PROFILES: tableNames.profiles,
+      TABLE_BATCHES: tableNames.batches,
+      TABLE_DOCUMENTS: tableNames.documents,
+      ANALYSIS_QUEUE_URL: analysisQueue.queueUrl,
     };
 
     // ── HTTP API (API Gateway v2): cheaper and faster than REST, with a native JWT authorizer. ──
@@ -130,21 +164,74 @@ export class ApiStack extends cdk.Stack {
         })
       );
 
-    // ── Items ────────────────────────────────────────────────────────────────
-    const itemsFn = fn('ItemsFn', 'items.ts');
-    tables.items.grantReadWriteData(itemsFn);
-    tables.shares.grantReadWriteData(itemsFn); // access checks + cascade delete
-    grantQueryIndexes(itemsFn, tableNames.items); // GSI byOwner
-    grantQueryIndexes(itemsFn, tableNames.shares); // GSI byUser
-    route([M.GET, M.POST], '/items', itemsFn);
-    route([M.GET, M.PUT, M.DELETE], '/items/{itemId}', itemsFn);
+    // ── Profile ──────────────────────────────────────────────────────────────
+    const profileFn = fn('ProfileFn', 'profile.ts');
+    tables.profiles.grantReadWriteData(profileFn);
+    route([M.GET, M.PUT], '/profile', profileFn);
 
-    // ── Shares ───────────────────────────────────────────────────────────────
-    const sharesFn = fn('SharesFn', 'shares.ts');
-    tables.shares.grantReadWriteData(sharesFn);
-    tables.items.grantReadData(sharesFn); // owner check
-    route([M.GET, M.POST], '/items/{itemId}/shares', sharesFn);
-    route([M.DELETE], '/items/{itemId}/shares/{userId}', sharesFn);
+    // ── Imports (deterministic: batch creation + enqueue analysis) ────────────
+    const importsFn = fn('ImportsFn', 'imports.ts');
+    tables.batches.grantReadWriteData(importsFn);
+    tables.documents.grantReadWriteData(importsFn);
+    grantQueryIndexes(importsFn, tableNames.batches); // GSI byOwner
+    analysisQueue.grantSendMessages(importsFn);
+    route([M.POST, M.GET], '/imports', importsFn);
+    route([M.GET], '/imports/{batchId}', importsFn);
+
+    // ── Documents (read-only library + document detail) ──────────────────────
+    const documentsFn = fn('DocumentsFn', 'documents.ts');
+    tables.documents.grantReadData(documentsFn);
+    grantQueryIndexes(documentsFn, tableNames.documents); // GSIs byOwner + byOwnerState
+    route([M.GET], '/documents', documentsFn);
+    route([M.GET], '/documents/{documentId}', documentsFn);
+
+    // ── Analysis worker (SQS-triggered; the ONLY Bedrock/S3 component) ────────
+    // Not built via the `fn` helper: it needs a 120s per-document budget
+    // (Req 3.9), more memory, reserved concurrency, and no API route — it is
+    // queue-triggered only.
+    const analysisWorkerFn = new NodejsFunction(this, 'AnalysisWorkerFn', {
+      functionName: naming.standard('analysis-worker'),
+      entry: path.join(__dirname, '../../../backend/src/handlers', 'analysis-worker.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      tracing: lambda.Tracing.ACTIVE,
+      // Node 22 already ships AWS SDK v3 → don't bundle it (same as `fn`).
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true },
+      timeout: cdk.Duration.seconds(120), // Req 3.9 per-document budget
+      memorySize: 1024,
+      reservedConcurrentExecutions: 5, // bound Bedrock/host load (NFR-3)
+      environment: {
+        ...commonEnv,
+        CONTENT_BUCKET: naming.standard('content'),
+        BEDROCK_MODEL_ID,
+        EMBEDDINGS_ENABLED: 'false', // Tier B embeddings deferred (OD-2)
+      },
+    });
+
+    // SQS trigger: small batches (1–5) with partial-batch-failure reporting so
+    // the handler's `batchItemFailures` return redrives only failed records.
+    analysisWorkerFn.addEventSource(
+      new eventsources.SqsEventSource(analysisQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    tables.documents.grantReadWriteData(analysisWorkerFn);
+    tables.batches.grantReadWriteData(analysisWorkerFn);
+    tables.profiles.grantReadData(analysisWorkerFn);
+    contentBucket.grantReadWrite(analysisWorkerFn);
+    grantQueryIndexes(analysisWorkerFn, tableNames.documents); // GSIs byOwner, byOwnerState
+
+    // Bedrock invoke scoped to the configured foundation model. Foundation
+    // models are account-less, so the ARN omits the account segment.
+    analysisWorkerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock:InvokeModel'],
+        resources: [`arn:aws:bedrock:${this.region}::foundation-model/${BEDROCK_MODEL_ID}`],
+      })
+    );
 
     // ── Users (managed via Cognito; ADMIN only except /users/me) ──────────────
     const usersFn = fn('UsersFn', 'users.ts');

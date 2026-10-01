@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Validate After Spec Task",
+      "trigger": "PostTaskExec",
+      "description": "Runs the full validation suite (build shared + lint + css + typecheck + format check + tests) after every Spec task is marked completed.",
+      "action": {
+        "type": "command",
+        "command": "npm run validate"
+      }
+    }
+  ]
+}

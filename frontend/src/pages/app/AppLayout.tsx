@@ -19,8 +19,11 @@ export default function AppLayout() {
             {'{{PROJECT_NAME}}'}
           </Link>
           <nav className="flex gap-4 text-sm text-gray-600">
-            <Link to="/app" className="hover:text-gray-900">
-              Items
+            <Link to="/app/library" className="hover:text-gray-900">
+              Library
+            </Link>
+            <Link to="/app/add" className="hover:text-gray-900">
+              Add content
             </Link>
             <Link to="/app/profile" className="hover:text-gray-900">
               Profile

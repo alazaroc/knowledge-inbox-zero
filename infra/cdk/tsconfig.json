@@ -6,5 +6,5 @@
     "module": "commonjs",
     "lib": ["ES2020"]
   },
-  "include": ["lib", "bin"]
+  "include": ["lib", "bin", "test"]
 }

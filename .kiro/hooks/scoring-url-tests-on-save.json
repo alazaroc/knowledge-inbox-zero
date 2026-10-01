@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Scoring/URL Tests On Save",
+      "trigger": "PostFileSave",
+      "matcher": "shared[\\\\/]src[\\\\/](scoring|url)\\.ts$",
+      "description": "When the pure deterministic core (shared/src/scoring.ts or shared/src/url.ts) is saved, run the backend scoring + canonicalization unit and property tests so invariant regressions (MKV bounds/monotonicity, idempotent canonicalization, dedup) surface immediately. Design: Kiro Capability Opportunities.",
+      "action": {
+        "type": "command",
+        "command": "npm test -w backend -- \"url|scoring\""
+      }
+    }
+  ]
+}

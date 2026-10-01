@@ -1,0 +1,15 @@
+{
+  "highInterests": [
+    "Serverless architecture on AWS",
+    "TypeScript type systems",
+    "Event-driven design patterns"
+  ],
+  "mediumInterests": ["WebAssembly", "Progressive Web Apps", "Observability and tracing"],
+  "currentlyResearching": [
+    "Retrieval-augmented generation",
+    "Vector databases for semantic search"
+  ],
+  "alreadyKnown": ["REST API design", "SQL fundamentals", "Git workflows"],
+  "avoidContentTypes": ["Marketing listicles", "Clickbait opinion pieces", "Vendor sales webinars"],
+  "context": "Fictional demo persona 'Alex Example', a backend engineer exploring serverless and AI tooling. This is synthetic sample data for demos only and does not represent any real person."
+}

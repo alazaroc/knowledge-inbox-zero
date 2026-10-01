@@ -5,8 +5,10 @@ import { ReloadPrompt } from './components/ReloadPrompt';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './pages/app/AppLayout';
 import LoginPage from './pages/auth/LoginPage';
-import ItemsPage from './pages/app/ItemsPage';
 import ProfilePage from './pages/app/ProfilePage';
+import AddContentPage from './pages/app/AddContentPage';
+import LibraryPage from './pages/app/LibraryPage';
+import DocumentDetailPage from './pages/app/DocumentDetailPage';
 
 configureAmplify();
 
@@ -27,7 +29,10 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<ItemsPage />} />
+            <Route index element={<LibraryPage />} />
+            <Route path="add" element={<AddContentPage />} />
+            <Route path="library" element={<LibraryPage />} />
+            <Route path="library/:documentId" element={<DocumentDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 

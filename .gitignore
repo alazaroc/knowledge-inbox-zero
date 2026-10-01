@@ -13,3 +13,17 @@ coverage/
 # TypeScript build artifacts
 *.tsbuildinfo
 
+# Privacy guard (NFR-3.2): never commit real personal data.
+# Keep private profiles / URL lists / analysis history out of the repo.
+*.personal.json
+*.private.json
+*.local.*
+secrets/
+personal-data/
+
+# Keep the clearly-synthetic demo fixtures tracked despite the rules above.
+!examples/
+!examples/sample-profile.json
+!examples/sample-urls.txt
+!examples/README.md
+
