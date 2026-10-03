@@ -148,5 +148,23 @@ accident); delete it manually if you want it gone.
 
 ---
 
+## Optional: the desktop browser extension
+
+A small **Manifest V3 browser extension** (`browser-extension/`) adds a toolbar
+button for **one-click save** of the current tab to your inbox — the desktop
+equivalent of "Save to Pocket". It is **optional** and **not required** to use
+the app; it just opens the app's "Add content" page with the link pre-filled,
+using your existing logged-in session (no extra setup, no token).
+
+- **Load unpacked** in Chrome/Brave/Edge/Firefox (dev mode), or **publish to the
+  stores** yourself.
+- The target instance is configurable in the popup, so a self-hosted deploy or a
+  fork points it at its own URL.
+
+Full instructions (load-unpacked per browser, keyboard shortcut, packaging):
+[browser-extension/README.md](browser-extension/README.md).
+
+---
+
 See [README.md](README.md) for the architecture, the Marginal Knowledge Value model, and
 the full command reference.

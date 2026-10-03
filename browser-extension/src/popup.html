@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Knowledge Inbox Zero</title>
+  </head>
+  <body>
+    <header class="header">
+      <img src="../icons/icon-48.png" alt="" width="24" height="24" />
+      <h1>Knowledge Inbox Zero</h1>
+    </header>
+
+    <main class="main">
+      <p class="tab-title" id="tabTitle">Loading current tab…</p>
+      <p class="tab-url" id="tabUrl"></p>
+
+      <button class="primary" id="saveBtn" type="button" disabled>
+        Save this tab
+      </button>
+      <p class="hint" id="status"></p>
+
+      <details class="settings">
+        <summary>Settings</summary>
+        <label for="baseUrl">App URL (where your inbox lives)</label>
+        <input
+          id="baseUrl"
+          type="url"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://inbox.playingaws.com"
+        />
+        <div class="row">
+          <button class="secondary" id="saveUrlBtn" type="button">Save URL</button>
+          <button class="link" id="resetUrlBtn" type="button">Reset to default</button>
+        </div>
+        <p class="hint" id="urlStatus"></p>
+      </details>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

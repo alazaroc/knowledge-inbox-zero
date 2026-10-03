@@ -63,6 +63,9 @@ Default region `eu-south-2` (configurable). Environment: `prod` (the `test` envi
 ├── frontend/           # React SPA — pages: Profile, Add Content, Library, Document Detail
 ├── backend/            # Lambda handlers: profile, imports, documents, analysis-worker, users
 ├── infra/cdk/          # CDK stacks: storage, auth, api, frontend
+├── mcp-server/         # MCP server (stdio) — thin client of the API: submit URLs, list recs, explain
+├── power/              # Kiro Power — connect any agent to the hosted app (plugin.json + mcp.json + skill)
+├── browser-extension/  # Optional MV3 desktop extension — one-click "save this tab" (not deployed)
 ├── scripts/            # deploy.sh, create-user.sh, set-password.sh, dev-frontend.sh
 ├── .github/workflows/  # pipeline.yml (lint → test → build → deploy)
 └── Makefile            # unified command interface
@@ -140,7 +143,60 @@ make set-password EMAIL=x@email.com PASSWORD='New.Secure123!' ENV=test
 
 - **V1 (built)**: profile, paste-URL import, async analysis, MKV scoring, recommendation + explanation, persistent library, web UI, per-user privacy.
 - **Optional stretch (behind flags)**: client-side bookmark-HTML import, embeddings-based semantic novelty, section-level read/skip guidance, user-selectable Bedrock model.
-- **Out of scope for V1**: full bookmark manager, reader/highlights/annotations, RSS/newsletter ingestion, mobile apps, browser extensions, collaborative libraries, generic chatbot over the library, knowledge graphs, large-scale vector infrastructure.
+- **Optional desktop component**: a Manifest V3 **browser extension** (`browser-extension/`) that one-click saves the current tab to your inbox. Not required to use the app, and not deployed with it — see its [README](browser-extension/README.md).
+- **Out of scope for V1**: full bookmark manager, reader/highlights/annotations, RSS/newsletter ingestion, mobile apps, collaborative libraries, generic chatbot over the library, knowledge graphs, large-scale vector infrastructure.
+
+## MCP server
+
+An MCP server (`mcp-server/`) exposes Knowledge Inbox Zero to any MCP-capable
+agent over `stdio`. It is a **thin client** of the deployed API — it does no
+scoring itself; each tool maps to one endpoint:
+
+| Tool                   | Endpoint                  | Purpose                                          |
+| ---------------------- | ------------------------- | ------------------------------------------------ |
+| `submit_urls`          | `POST /imports`           | Send URLs for asynchronous analysis.             |
+| `list_recommendations` | `GET /documents[?state=]` | List READ/SKIM/SKIP docs with MKV score + title. |
+| `explain_document`     | `GET /documents/{id}`     | Fetch one doc's explanation, scores, and state.  |
+
+Config is **environment-only** (never hardcoded): `KIZ_API_URL` plus either
+`KIZ_ID_TOKEN` or `KIZ_EMAIL` + `KIZ_PASSWORD` + `KIZ_COGNITO_CLIENT_ID`
+(Cognito `USER_PASSWORD_AUTH` at startup). Build + test:
+
+```bash
+npm run build -w @app/mcp-server
+npm test -w @app/mcp-server      # no-network: tool contract + schemas + handlers
+```
+
+Full tool reference, example calls/results, and how to run it locally or from a
+Kiro cloud session: [docs/mcp.md](docs/mcp.md).
+
+## Kiro Power
+
+`power/` packages the capability to **connect to a hosted Knowledge Inbox Zero
+from any Kiro agent** — not the app's source. It follows the
+[Agent Plugins](https://agent-plugins.org/) format: a `plugin.json` manifest,
+an `mcp.json` that wires the MCP server above, and a skill
+(`power/skills/connect-to-inbox-zero/SKILL.md`) that teaches an agent — with no
+access to this repo — to send links and read recommendations through the three
+tools. Install it via Kiro's **Add Custom Power**, set the `KIZ_*` environment,
+then ask the agent "what should I read?".
+
+## Lessons demonstrated
+
+Each Kiro capability this project exercises, mapped to concrete evidence in the
+repo.
+
+| #       | Capability                             | Where                                                     | Evidence                                                                                                                              |
+| ------- | -------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | **Spec**                               | `.kiro/specs/knowledge-inbox-zero/`                       | `requirements.md`, `design.md`, `tasks.md` drove the build.                                                                           |
+| 2       | **Steering**                           | `.kiro/steering/`                                         | `product.md`, `tech.md`, `conventions.md`, `architecture-principles.md`, `structure.md`.                                              |
+| 3       | **Hooks**                              | `.kiro/hooks/`                                            | `scoring-url-tests-on-save.json`, `validate-after-spec-task.json`, `personal-data-precommit-guard.json`, `mcp-contract-on-save.json`. |
+| 4       | **Property-based testing**             | `backend/src/__tests__/*.property.test.ts`                | `scoring.property.test.ts`, `url.property.test.ts`, `documents.property.test.ts`, `worker.counters.property.test.ts` (`fast-check`).  |
+| 5       | **Powers**                             | `power/`                                                  | `plugin.json` + `mcp.json` + `skills/connect-to-inbox-zero/SKILL.md`.                                                                 |
+| 6       | **MCP**                                | `mcp-server/`                                             | stdio server, 3 tools, `test/server.test.ts`, guarded by hook #4 above.                                                               |
+| 7       | **Custom agents**                      | `.kiro/agents/serverless-reviewer.md`                     | A serverless-focused code-review agent.                                                                                               |
+| Bonus A | **Deterministic-first cost design**    | `shared/src/scoring.ts` + `.kiro/steering/conventions.md` | Bedrock invoked only for extraction + explanation; all MKV math is pure, property-tested, and reused by API + worker.                 |
+| Bonus B | **Optional desktop browser extension** | `browser-extension/`                                      | Manifest V3 one-click "save this tab" (optional, not deployed).                                                                       |
 
 ## License
 

@@ -27,7 +27,8 @@ LAMBDAS := profile imports documents analysis-worker users
 .PHONY: help install dev dev-env build build-shared \
         test lint lint-fix fix typecheck format quality-check validate \
         deploy deploy-backend deploy-frontend \
-        create-user create-admin set-password logs-lambdas aws-credentials clean
+        create-user create-admin set-password logs-lambdas aws-credentials clean \
+        extension-package
 
 ## help: show this help
 help:
@@ -159,6 +160,12 @@ aws-credentials:
 	@printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s\naws_session_token=%s\n' \
 		"$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY" "$$AWS_SESSION_TOKEN" > ~/.aws/credentials
 	@echo "✅ Credentials saved to ~/.aws/credentials (default profile)"
+
+# ── Browser extension (optional desktop component) ───────────────────────────
+
+## extension-package: zip the browser extension for store upload (not deployed with the app)
+extension-package:
+	./browser-extension/package.sh
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 
