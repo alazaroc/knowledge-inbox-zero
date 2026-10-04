@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 /**
@@ -10,18 +11,45 @@ export function ReloadPrompt() {
     updateServiceWorker,
   } = useRegisterSW();
 
+  // Guard against a double reload: once we trigger a reload we never trigger a
+  // second one (a second reload mid-navigation is what left Brave on a blank
+  // page with a module-load error).
+  const reloading = useRef(false);
+
   if (!needRefresh) return null;
 
-  // Apply the waiting SW and reload. updateServiceWorker(true) asks the new
-  // worker to skipWaiting, but on some hosts (CloudFront + registerType
-  // "prompt") the controllerchange that would auto-reload does not always
-  // fire — so we force a reload ourselves as a backstop once the call settles.
+  // Apply the waiting SW, then reload ONLY after the new worker has taken
+  // control. Forcing window.location.reload() synchronously (the old approach)
+  // raced the activation: the page could reload while the old hashed chunks had
+  // already been purged by the new precache, so the cached index.html pointed
+  // at bundles that no longer existed → blank screen + JS error (seen in Brave
+  // behind CloudFront). Reloading on `controllerchange` guarantees the new SW
+  // is already serving the new assets before we navigate.
   const applyUpdate = async () => {
-    try {
-      await updateServiceWorker(true);
-    } finally {
+    if (reloading.current) return;
+
+    const reloadOnce = () => {
+      if (reloading.current) return;
+      reloading.current = true;
       window.location.reload();
+    };
+
+    // Primary signal: the new SW became the active controller.
+    navigator.serviceWorker?.addEventListener('controllerchange', reloadOnce, { once: true });
+
+    try {
+      // skipWaiting() on the waiting worker → it activates and claims clients,
+      // which fires `controllerchange` above.
+      await updateServiceWorker(true);
+    } catch {
+      // If activation throws, fall through to the timeout backstop below.
     }
+
+    // Backstop: some hosts don't reliably emit `controllerchange` (observed on
+    // CloudFront + registerType "prompt"). If it hasn't fired shortly after the
+    // update call settles, reload anyway so the user is never stuck on the
+    // prompt. The `reloading` guard keeps this from double-firing.
+    window.setTimeout(reloadOnce, 1500);
   };
 
   return (

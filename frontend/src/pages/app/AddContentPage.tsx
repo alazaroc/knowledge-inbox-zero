@@ -145,11 +145,16 @@ export default function AddContentPage() {
     try {
       const res = await api.post<ImportResult>('/imports', { urls: payloadUrls });
 
-      // Nothing enqueued AND nothing blocked by quota AND nothing rejected means
-      // the submission carried no valid URL (Req 8.4). But if the daily limit
-      // blocked everything (blocked > 0) that's a legitimate outcome to show.
+      // Nothing enqueued AND nothing blocked by quota AND nothing rejected AND
+      // nothing reused as a duplicate means the submission carried no valid URL
+      // (Req 8.4). A duplicate (the URL already exists in the library) is a
+      // LEGITIMATE outcome — the URL was valid, we just already had it — so it
+      // must NOT trigger the "no valid URL" error.
       const nothingHappened =
-        res.pending === 0 && res.blocked.length === 0 && res.rejected.length === 0;
+        res.pending === 0 &&
+        res.blocked.length === 0 &&
+        res.rejected.length === 0 &&
+        !res.duplicates;
       if (nothingHappened) {
         setError('At least one valid URL is required.');
         setSubmitting(false);
@@ -333,13 +338,19 @@ export default function AddContentPage() {
             </div>
           )}
 
-          {/* Remaining quota today (USER role only; ADMIN is unlimited). */}
-          {createResult.remaining !== null && (
-            <p className="text-xs text-gray-500">
-              Daily quota: {createResult.remaining} of {createResult.dailyLimit} link
-              {createResult.dailyLimit === 1 ? '' : 's'} left today.
-            </p>
-          )}
+          {/* Remaining quota today (USER role only; ADMIN is unlimited). Shown
+              only when running low (less than 25% left) — surfacing it on every
+              import is noise for normal use; it matters only as you approach the
+              cap. The 25% threshold scales with the limit instead of a fixed
+              number, so it still warns in time if the daily cap changes. */}
+          {createResult.remaining !== null &&
+            createResult.dailyLimit !== null &&
+            createResult.remaining < createResult.dailyLimit * 0.25 && (
+              <p className="text-xs text-amber-600">
+                Daily quota: {createResult.remaining} of {createResult.dailyLimit} link
+                {createResult.dailyLimit === 1 ? '' : 's'} left today.
+              </p>
+            )}
 
           {/* Visual progress bar: finished (completed+failed) over total. Only
               shown when there is pipeline work; a fully blocked/duplicate batch

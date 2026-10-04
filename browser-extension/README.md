@@ -1,9 +1,8 @@
 # Knowledge Inbox Zero — browser extension
 
 A tiny toolbar button that sends the **current tab** to your Knowledge Inbox
-Zero inbox — the desktop equivalent of "Save to Pocket". Click it (or press the
-shortcut) and the link lands pre-filled on the app's **Add content** page, ready
-to analyze.
+Zero inbox with one click. Click it (or press the shortcut) and the link lands
+pre-filled on the app's **Add content** page, ready to analyze.
 
 - **Manifest V3** — works in Chrome, Brave, Edge, and Firefox (121+).
 - **No login, no token.** It opens `…/app/add?url=…&title=…` in a new tab and

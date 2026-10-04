@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "MCP Contract On Save",
+      "trigger": "PostFileSave",
+      "matcher": "mcp-server[\\\\/]src[\\\\/].*\\.ts$",
+      "description": "When any Knowledge Inbox Zero MCP server source file is saved, rebuild the server and assert it still exposes EXACTLY the three expected tools (submit_urls, list_recommendations, explain_document) with valid input schemas. A contract-regression guard so an edit cannot silently drop, rename, or break a tool. Design: Kiro Capability Opportunities (hooks #4).",
+      "action": {
+        "type": "command",
+        "command": "node .kiro/hooks/scripts/mcp-contract-guard.mjs"
+      }
+    }
+  ]
+}

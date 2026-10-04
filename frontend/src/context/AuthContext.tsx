@@ -6,6 +6,7 @@ interface AuthUser {
   sub: string;
   email: string;
   role: Role;
+  emailVerified: boolean;
 }
 
 interface AuthContextValue {
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sub: current.userId,
         email: current.signInDetails?.loginId ?? '',
         role,
+        emailVerified: payload['email_verified'] === true,
       });
     } catch {
       setUser(null);

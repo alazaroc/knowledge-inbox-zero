@@ -367,14 +367,14 @@ describe('imports handler — daily quota hard block (USER)', () => {
     };
     expect(body.pending).toBe(10);
     expect(body.blocked).toHaveLength(0);
-    expect(body.dailyLimit).toBe(50);
-    expect(body.remaining).toBe(40);
+    expect(body.dailyLimit).toBe(100);
+    expect(body.remaining).toBe(90);
     expect(usageIncrement()).toBe(10);
   });
 
   it('hard-blocks the excess and returns the unprocessed URLs', async () => {
     authAs(SUB);
-    ddbWithUsage(45); // only 5 of today's 50 left
+    ddbWithUsage(95); // only 5 of today's 100 left
 
     const blob = Array.from({ length: 12 }, (_, i) => url(i)).join('\n');
     const res = await handler(postImports(blob));
@@ -398,7 +398,7 @@ describe('imports handler — daily quota hard block (USER)', () => {
 
   it('blocks everything when the day is already exhausted, creating no documents', async () => {
     authAs(SUB);
-    ddbWithUsage(50); // nothing left today
+    ddbWithUsage(100); // nothing left today
 
     const blob = Array.from({ length: 3 }, (_, i) => url(i)).join('\n');
     const res = await handler(postImports(blob));

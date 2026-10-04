@@ -1,123 +1,72 @@
-# Contributing to this project
+# Contributing
 
-Thank you for your interest in contributing to this project! We welcome contributions from the community.
+Thanks for your interest in Knowledge Inbox Zero! Contributions are welcome.
 
 ## Code of Conduct
 
-This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it.
 
-## How to Contribute
+## Reporting bugs
 
-### Reporting Bugs
-
-If you find a bug, please open an issue on GitHub with:
+Open a GitHub issue with:
 
 - A clear description of the problem
-- Steps to reproduce the issue
-- Expected vs actual behavior
-- Your environment (OS, Node version, etc.)
+- Steps to reproduce
+- Expected vs. actual behavior
+- Your environment (OS, Node version)
 
-### Suggesting Features
+## Suggesting features
 
-We welcome feature suggestions! Please open an issue with:
+Open an issue describing the feature, the use case, and why it fits the product — remember the one question the product answers: _what deserves this user's attention, and why?_ Changes that turn it into a bookmark manager, read-it-later app, or RSS reader are out of scope (see the [README](README.md#scope)).
 
-- A clear description of the feature
-- Use cases and benefits
-- Any implementation ideas you have
+## Development setup
 
-### Pull Requests
-
-1. **Fork the repository** and create your branch from `main`
-2. **Install dependencies**: `npm install`
-3. **Make your changes** following our coding standards
-4. **Add tests** for any new functionality
-5. **Run tests**: `npm test`
-6. **Run linting**: `npm run lint`
-7. **Format code**: `npm run format`
-8. **Commit your changes** with clear commit messages
-9. **Push to your fork** and submit a pull request
-
-### Development Setup
+Requires Node.js ≥ 22. See [INSTALL.md](INSTALL.md) for the full AWS setup.
 
 ```bash
-# Clone your fork
-git clone https://github.com/alazaroc/serverless-monorepo-aws-starter.git
-cd serverless-monorepo-aws-starter
+git clone https://github.com/alazaroc/knowledge-inbox-zero.git
+cd knowledge-inbox-zero
 
-# Install dependencies
-npm install
-
-# Build all packages
-npm run build
-
-# Run tests
-npm test
-
-# Run linting
-npm run lint
+make install        # npm ci — clean, reproducible
+make build          # build shared + backend + frontend
+make validate       # build shared + lint + css + typecheck + format + tests
 ```
 
-### Coding Standards
+`make help` lists every target.
 
-- **TypeScript**: All code must be written in TypeScript
-- **ESLint**: Follow the ESLint configuration
-- **Prettier**: Format code with Prettier
-- **Tests**: Write unit tests for business logic
-- **Property-based tests**: Use fast-check for correctness properties
-- **Comments**: Add JSDoc comments for public APIs
+## Pull requests
 
-### Project Structure
+1. Fork and branch from `main`.
+2. Make your change, following the conventions below.
+3. Add or update tests for new behavior.
+4. Keep `make validate` green (build, lint, typecheck, format, tests).
+5. Open a PR with a clear description of what changed and why.
 
-- `frontend/` - React application
-- `backend/` - Lambda functions organized by domain
-- `infra/cdk/` - AWS CDK infrastructure
+A pre-commit hook (husky + lint-staged) auto-fixes lint and formatting on staged files, so most style issues are handled for you.
 
-### Backend Domain Structure
-
-Each backend domain follows this pattern:
+## Project structure
 
 ```
-backend/services/<domain>/
-├── handlers/        # Lambda entrypoints (thin)
-├── services/        # Business logic
-├── models/          # TypeScript interfaces
-└── __tests__/       # Unit tests
+shared/      # @app/shared — types, zod schemas, pure deterministic MKV logic (build first)
+frontend/    # React SPA (Vite + Tailwind + PWA + Amplify)
+backend/     # Lambda handlers — backend/src/handlers/<domain>.ts, shared code in backend/src/lib/
+infra/cdk/   # CDK stacks: storage, auth, api, frontend
 ```
 
-### Commit Messages
+Backend convention: **one handler file per domain** in `backend/src/handlers/`, exporting a single `handler` that routes by HTTP method and path. Reusable logic lives in `backend/src/lib/`. Pure deterministic logic (canonicalization, dedup, MKV scoring) lives in `@app/shared` so it is property-tested once and reused by both the API and the worker.
 
-Follow conventional commits:
+## Coding standards
 
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation changes
-- `test:` - Test changes
-- `refactor:` - Code refactoring
-- `chore:` - Build/tooling changes
+- **TypeScript** everywhere (ESM; local `.ts` imports use `.js` extensions).
+- **Zod** at external boundaries (request bodies, env).
+- **Deterministic-first**: invoke Bedrock only for structured extraction and the written explanation; everything else stays pure.
+- **Tests**: Jest (backend) and Vitest (frontend). Use `fast-check` property tests for the deterministic logic in `@app/shared`.
+- Reuse existing repo patterns; avoid adding dependencies without justification.
 
-Example: `feat: add semantic search to chatbot`
+## Commit messages
 
-### Testing
-
-- **Unit tests**: Test business logic in isolation
-- **Property-based tests**: Verify correctness properties
-- **E2E tests**: Test complete user flows with Playwright
-- **Coverage**: Maintain >80% code coverage
-
-### Pull Request Process
-
-1. Update documentation if needed
-2. Add tests for new functionality
-3. Ensure all tests pass
-4. Update CHANGELOG.md if applicable
-5. Request review from maintainers
-6. Address review feedback
-7. Squash commits before merge
-
-### Questions?
-
-Feel free to open an issue for any questions or reach out to the maintainers.
+Conventional commits are appreciated: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree your contributions are licensed under the [MIT License](LICENSE).

@@ -60,8 +60,9 @@ export const serverError = (err: unknown): APIGatewayProxyResult => {
   const msg = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
   console.error(
+    '[ERROR]',
     JSON.stringify({
-      level: 'error',
+      level: 'ERROR',
       type: 'unhandled',
       message: msg,
       name: err instanceof Error ? err.name : undefined,

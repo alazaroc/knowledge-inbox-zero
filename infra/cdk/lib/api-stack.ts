@@ -221,7 +221,10 @@ export class ApiStack extends cdk.Stack {
       );
 
     // ── Profile ──────────────────────────────────────────────────────────────
-    const profileFn = fn('ProfileFn', 'profile.ts');
+    // Profile import (POST /profile/import) drafts a profile from fetched/pasted
+    // text via one Bedrock call, so this handler needs BEDROCK_MODEL_ID in its
+    // env (same model as the analysis worker) AND bedrock:InvokeModel below.
+    const profileFn = fn('ProfileFn', 'profile.ts', { BEDROCK_MODEL_ID });
     tables.profiles.grantReadWriteData(profileFn);
     // Reads + writes the per-user token map (store/clear a private-repo token).
     profileTokens.grantRead(profileFn);
@@ -231,6 +234,9 @@ export class ApiStack extends cdk.Stack {
     profileFn.addToRolePolicy(bedrockInvokePolicy());
     route([M.GET, M.PUT], '/profile', profileFn);
     route([M.POST], '/profile/import', profileFn);
+    // Profile sync (POST /profile/sync) re-fetches the configured source file
+    // LIVE and refreshes the stored profile; same handler, same perms.
+    route([M.POST], '/profile/sync', profileFn);
 
     // ── Imports (deterministic: batch creation + enqueue analysis) ────────────
     const importsFn = fn('ImportsFn', 'imports.ts');

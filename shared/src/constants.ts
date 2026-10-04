@@ -13,7 +13,14 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 // duplicates, already-owned URLs and rejected lines do not consume quota.
 // ADMIN is unlimited. The excess is NOT dropped silently: a hard block returns
 // the unprocessed URLs so the user can save them and retry the next day.
-export const DAILY_IMPORT_LIMIT_USER = 50;
+export const DAILY_IMPORT_LIMIT_USER = 100;
+
+// Single source of truth for the "About you" / profile context length limit.
+// The SAME number governs: the editable About textarea in the UI, the stored
+// `context` schema bound, and the imported-file snapshot cap. Keeping them in
+// one place is what prevents the UI from accepting a length the store then
+// silently truncates. 8000 chars fits a full "about me" page.
+export const MAX_PROFILE_CONTEXT_CHARS = 8000;
 
 // Recommendation state — the single verdict per analyzed document (Req 6.1).
 export const RECOMMENDATION_STATE = ['READ', 'SKIM', 'SKIP'] as const;

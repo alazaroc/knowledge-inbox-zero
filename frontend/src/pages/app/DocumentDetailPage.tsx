@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Archive, ArchiveRestore, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Sparkles,
+  Star,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+} from 'lucide-react';
 import type {
   KnowledgeDocument,
   RecommendationState,
@@ -120,6 +128,23 @@ export default function DocumentDetailPage() {
     }
   };
 
+  // Toggle starred ("to read / keep") via PATCH; does not change counts.
+  const handleToggleStar = async () => {
+    if (!documentId || !doc || lifecycleBusy) return;
+    setLifecycleBusy(true);
+    setError('');
+    try {
+      const updated = await api.patch<KnowledgeDocument>(`/documents/${documentId}`, {
+        starred: !doc.starred,
+      });
+      setDoc(updated);
+    } catch (err) {
+      setError((err as Error).message || 'Failed to update the document.');
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
   // Hard delete with confirmation; the backend decrements owner-wide counts.
   const handleDelete = async () => {
     if (!documentId || lifecycleBusy) return;
@@ -160,7 +185,7 @@ export default function DocumentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           to="/app/library"
           className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
@@ -168,7 +193,22 @@ export default function DocumentDetailPage() {
           ← Back to library
         </Link>
         {doc && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleToggleStar()}
+              disabled={lifecycleBusy}
+              aria-pressed={doc.starred}
+              title={doc.starred ? 'Remove from “to read”' : 'Mark as “to read”'}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                doc.starred
+                  ? 'border-amber-300 bg-amber-50 text-amber-700'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Star className={`h-4 w-4 ${doc.starred ? 'fill-amber-500 text-amber-500' : ''}`} />{' '}
+              To read
+            </button>
             <button
               type="button"
               onClick={() => void handleToggleArchive()}
@@ -282,14 +322,20 @@ export default function DocumentDetailPage() {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              {doc.recommendationState && (
-                <span
-                  className={`rounded-full px-3 py-1 text-sm font-semibold ring-1 ${
-                    STATE_STYLES[doc.recommendationState]
-                  }`}
-                >
-                  {doc.recommendationState}
+              {doc.degraded ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-600 ring-1 ring-gray-200">
+                  Couldn&apos;t analyze
                 </span>
+              ) : (
+                doc.recommendationState && (
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ring-1 ${
+                      STATE_STYLES[doc.recommendationState]
+                    }`}
+                  >
+                    {doc.recommendationState}
+                  </span>
+                )
               )}
               {doc.tags?.map((tag) => (
                 <span
@@ -310,10 +356,15 @@ export default function DocumentDetailPage() {
           {/* PRIMARY output: the written explanation (Req 6.8). It covers why the
               document matters, what is new, the reason for the state, and what
               deserves attention vs. what can be ignored (Req 6.2, 8.9). */}
-          <section className="space-y-2 rounded-lg border border-indigo-200 bg-indigo-50/60 p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-700">
-              Why this recommendation
-            </h2>
+          <section className="space-y-3 rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-700">
+                Why this recommendation
+              </h2>
+            </div>
             {doc.explanationUnavailable ? (
               <p className="text-sm text-indigo-900/70">
                 We couldn&apos;t generate a written explanation for this document. The scores and

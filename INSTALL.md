@@ -40,8 +40,8 @@ credentials and account **you** configure. Nothing you deploy touches anyone els
 - An **AWS account**, with the **AWS CLI** configured (`aws configure` or `aws sso login`).
 - **AWS CDK** bootstrapped in your account/region (`cdk bootstrap`, once).
 - **Amazon Bedrock model access enabled** for the model you'll use. In some regions
-  (e.g. `eu-south-2` / Spain) Nova/Claude require an **inference profile** — see
-  "Choosing a region & model" below.
+  (e.g. `eu-south-2` / Spain) models are invocable only through an **inference profile**
+  (not on-demand) — see "Choosing a region & model" below.
 
 ### 1. Clone and install
 
@@ -102,12 +102,14 @@ make dev         # Vite dev server pointed at your deployed backend
 - **Region** defaults to `eu-south-2`. Override with `AWS_REGION` (deploy) — nothing is
   hardcoded to a specific region in the app logic.
 - **Model** is set at deploy time via `BEDROCK_MODEL_ID` (a redeploy switches models with
-  no code change). Pick a model your account has Bedrock access to.
-- **Inference profiles**: in regions like `eu-south-2`, on-demand invocation of Nova/Claude
-  requires an EU **inference profile** (`eu.amazon.*` / `eu.anthropic.*`) rather than the
-  bare model id. Check with `aws bedrock list-inference-profiles`. An EU inference profile
-  routes to any of its member regions, so the Lambda's IAM must allow the model ARN across
-  all of them — the CDK already scopes this to the model with a region wildcard.
+  no code change). The default is `global.amazon.nova-2-lite-v1:0` — Amazon Nova 2 Lite via
+  the GLOBAL inference profile. Pick a model your account has Bedrock access to.
+- **Inference profiles**: in regions like `eu-south-2`, Nova/Claude are not invocable
+  on-demand and require an **inference profile** instead of the bare model id — either the
+  GLOBAL profile (`global.*`, routes across the whole partition; the default) or an EU one
+  (`eu.*`, routes across EU regions only). Check with `aws bedrock list-inference-profiles`.
+  A profile routes to any of its member regions, so the Lambda's IAM must allow the model
+  ARN across all of them — the CDK already scopes this to the model with a region wildcard.
 
 ## Optional: a custom domain
 
@@ -151,10 +153,10 @@ accident); delete it manually if you want it gone.
 ## Optional: the desktop browser extension
 
 A small **Manifest V3 browser extension** (`browser-extension/`) adds a toolbar
-button for **one-click save** of the current tab to your inbox — the desktop
-equivalent of "Save to Pocket". It is **optional** and **not required** to use
-the app; it just opens the app's "Add content" page with the link pre-filled,
-using your existing logged-in session (no extra setup, no token).
+button for **one-click save** of the current tab to your inbox. It is **optional**
+and **not required** to use the app; it just opens the app's "Add content" page
+with the link pre-filled, using your existing logged-in session (no extra setup,
+no token).
 
 - **Load unpacked** in Chrome/Brave/Edge/Firefox (dev mode), or **publish to the
   stores** yourself.

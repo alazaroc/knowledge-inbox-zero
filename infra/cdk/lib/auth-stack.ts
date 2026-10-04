@@ -1,6 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as path from 'path';
 import { Construct } from 'constructs';
 import { ResourceNaming } from './naming';
 
@@ -16,11 +19,26 @@ export class AuthStack extends cdk.Stack {
     super(scope, id, props);
     const { naming } = props;
 
+    // Pre-signup trigger: auto-confirm new accounts so users enter the app
+    // without a mandatory email-verification step (verification becomes a
+    // non-blocking in-app banner instead). See backend/src/handlers/pre-signup.ts.
+    const preSignUpFn = new NodejsFunction(this, 'PreSignUpFn', {
+      functionName: naming.standard('pre-signup'),
+      entry: path.join(__dirname, '../../../backend/src/handlers/pre-signup.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true },
+      timeout: cdk.Duration.seconds(5),
+      memorySize: 128,
+    });
+
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: naming.standard('users'),
       selfSignUpEnabled: true, // public sign-up (self-registration) enabled
       signInAliases: { email: true },
       autoVerify: { email: true },
+      lambdaTriggers: { preSignUp: preSignUpFn },
       passwordPolicy: {
         minLength: 12,
         requireLowercase: true,

@@ -36,10 +36,17 @@ export default function SignUpPage() {
         password,
         options: { userAttributes: { email } },
       });
-      if (out.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+      // The pre-signup trigger auto-confirms the account, so sign-up returns
+      // DONE and the user goes straight into the app (email verification is a
+      // non-blocking banner inside). If an environment still returns
+      // CONFIRM_SIGN_UP (e.g. before the trigger is deployed), fall back to the
+      // inline code step rather than dead-ending.
+      if (out.nextStep.signUpStep === 'DONE') {
+        await finishSignIn();
+      } else if (out.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         setInfo(`We sent a verification code to ${email}.`);
         setStep('CONFIRM');
-      } else if (out.nextStep.signUpStep === 'DONE') {
+      } else {
         await finishSignIn();
       }
     } catch (err) {

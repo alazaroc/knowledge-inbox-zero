@@ -1,8 +1,20 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Target, Gauge, UserCog, ArrowRight, Clock } from 'lucide-react';
+import {
+  Target,
+  Gauge,
+  UserCog,
+  ArrowRight,
+  UserPen,
+  ClipboardList,
+  Sparkles,
+  Server,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import PageLoader from '../components/ui/PageLoader';
+import GithubIcon from '../components/ui/GithubIcon';
+
+const GITHUB_URL = 'https://github.com/alazaroc/knowledge-inbox-zero';
 
 export default function LandingPage() {
   const { user, loading } = useAuth();
@@ -23,6 +35,16 @@ export default function LandingPage() {
           Knowledge Inbox Zero
         </div>
         <div className="flex items-center gap-4 text-sm">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden items-center gap-1.5 text-gray-600 hover:text-gray-900 sm:flex"
+            aria-label="View source on GitHub"
+          >
+            <GithubIcon className="h-4 w-4" />
+            GitHub
+          </a>
           <Link to="/login" className="text-gray-600 hover:text-gray-900">
             Sign in
           </Link>
@@ -63,118 +85,149 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Live demo: what the output actually looks like, inside a browser
-            frame. Rendered in CSS so it stays crisp and never goes stale (no
-            screenshot to maintain, no personal data on a public page). */}
-        <section className="mx-auto max-w-3xl px-4 pb-16">
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl shadow-indigo-100/50">
-            {/* Browser chrome */}
-            <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-100 px-4 py-2.5">
-              <span className="h-3 w-3 rounded-full bg-red-400" />
-              <span className="h-3 w-3 rounded-full bg-yellow-400" />
-              <span className="h-3 w-3 rounded-full bg-green-400" />
-              <span className="ml-3 flex-1 truncate rounded-md bg-white px-3 py-1 text-xs text-gray-400 ring-1 ring-gray-200">
-                inbox.playingaws.com/app/library
-              </span>
-            </div>
-
-            {/* App viewport */}
-            <div className="space-y-3 bg-gray-50 p-4 sm:p-6">
-              {/* Attention saved — the headline metric, mirroring the real app. */}
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 sm:p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-indigo-700">
-                  Attention saved
-                </p>
-                <p className="mt-1 text-3xl font-bold text-indigo-900 sm:text-4xl">
-                  23<span className="text-lg font-semibold text-indigo-500"> / 40</span>
-                </p>
-                <p className="mt-1 text-sm text-indigo-700">
-                  You saved attention on 23 of 40 links (57%) that didn&apos;t deserve it.
-                </p>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-indigo-100">
-                  <div className="h-full rounded-full bg-indigo-500" style={{ width: '57%' }} />
-                </div>
-              </div>
-
-              <p className="pt-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-                Your links, most valuable first
-              </p>
-              <div className="space-y-2">
-                <DemoCard
-                  title="Building event-driven architectures on AWS"
-                  domain="aws.amazon.com"
-                  verdict="worth"
-                  reason="Directly matches your AWS architecture focus and covers EventBridge patterns you're researching."
-                  minutes={12}
-                  mkv={88}
-                />
-                <DemoCard
-                  title="10 productivity hacks that changed my life"
-                  domain="medium.com"
-                  verdict="skip"
-                  reason="Generic listicle — the kind of content you asked to avoid. Nothing new for you."
-                  minutes={4}
-                  mkv={9}
-                />
-                <DemoCard
-                  title="A refresher on REST API design"
-                  domain="blog.example.com"
-                  verdict="maybe"
-                  reason="Mostly fundamentals you already know, but the versioning section may be worth a skim."
-                  minutes={7}
-                  mkv={41}
-                />
-              </div>
-            </div>
-          </div>
+        {/* Live demo: a real screenshot of the Library (the capture already
+            includes its own browser chrome), so the landing shows the actual
+            product — a verdict + reason + MKV per link, most valuable first. */}
+        <section className="mx-auto max-w-4xl px-4 pb-16">
+          <img
+            src="/screenshot-library.png"
+            alt="Knowledge Inbox Zero library: your links scored and sorted most valuable first, each with a Worth it / Maybe / Skip verdict, a short reason and an MKV score, plus the attention-saved metric."
+            className="w-full rounded-2xl border border-gray-200 shadow-xl shadow-indigo-100/50"
+            loading="lazy"
+          />
           <p className="mt-3 text-center text-xs text-gray-400">
             Paste a messy pile of links — get a verdict on each.
           </p>
         </section>
 
-        {/* Problem → solution, stated plainly. */}
-        <section className="border-y border-gray-100 bg-gray-50">
-          <div className="mx-auto grid max-w-4xl gap-8 px-4 py-14 sm:grid-cols-2">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-600">
-                The problem
-              </h2>
-              <p className="mt-2 text-lg text-gray-700">
-                You pile up articles &ldquo;for later&rdquo; — bookmarks, open tabs, links from
-                everywhere — and almost never open them again. The backlog only grows, and the good
-                stuff is buried in noise.
-              </p>
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
-                The solution
-              </h2>
-              <p className="mt-2 text-lg text-gray-700">
-                An AI filter built on <em>your</em> profile separates what teaches you something new
-                from what you already know or don&apos;t care about — so you spend your reading time
-                only where it pays off.
-              </p>
-            </div>
+        {/* How it works — three plain steps, mirroring the README. */}
+        <section className="mx-auto max-w-5xl px-4 pb-4 pt-4">
+          <h2 className="text-center text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            How it works
+          </h2>
+          <div className="mt-10 grid gap-6 sm:grid-cols-3">
+            <Step
+              n={1}
+              icon={<UserPen className="h-5 w-5 text-indigo-600" />}
+              title="Describe what you know"
+              body="Set your interests, what you're researching, and what you already master. This is how it decides what's worth your time."
+            />
+            <Step
+              n={2}
+              icon={<ClipboardList className="h-5 w-5 text-indigo-600" />}
+              title="Paste your links"
+              body="Drop in up to 500 URLs — a clean list or a messy dump. They're analyzed in the background; nothing blocks while you keep working."
+            />
+            <Step
+              n={3}
+              icon={<Sparkles className="h-5 w-5 text-indigo-600" />}
+              title="Read only what counts"
+              body="Each link comes back as Worth it, Maybe, or Skip — with a written reason and a score, newest and most valuable first."
+            />
           </div>
         </section>
 
-        {/* Features reframed to the benefit, each with its own icon. */}
-        <section className="mx-auto grid max-w-5xl gap-6 px-4 py-16 sm:grid-cols-3">
-          <Feature
-            icon={<Target className="h-6 w-6 text-indigo-600" />}
-            title="Scored by what it adds to you"
-            body="Not generic popularity — Marginal Knowledge Value weighs each link against what you already know and what you're researching."
-          />
-          <Feature
-            icon={<Gauge className="h-6 w-6 text-indigo-600" />}
-            title="Worth it, maybe, or skip"
-            body="One clear verdict per link with a short reason, so you decide in seconds instead of hoarding tabs."
-          />
-          <Feature
-            icon={<UserCog className="h-6 w-6 text-indigo-600" />}
-            title="Tuned to your profile"
-            body="Describe your interests and what you already master once; every score adapts to you from then on."
-          />
+        {/* Problem → solution, with the real "why this recommendation" view. */}
+        <section className="border-y border-gray-100 bg-gray-50">
+          <div className="mx-auto max-w-5xl px-4 py-14">
+            <div className="grid gap-8 sm:grid-cols-2">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-600">
+                  The problem
+                </h2>
+                <p className="mt-2 text-lg text-gray-700">
+                  You pile up articles &ldquo;for later&rdquo; — bookmarks, open tabs, links from
+                  everywhere — and almost never open them again. The backlog only grows, and the
+                  good stuff is buried in noise.
+                </p>
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
+                  The solution
+                </h2>
+                <p className="mt-2 text-lg text-gray-700">
+                  An AI filter built on <em>your</em> profile separates what teaches you something
+                  new from what you already know or don&apos;t care about — and explains every
+                  verdict in plain words. Never an opaque score.
+                </p>
+              </div>
+            </div>
+
+            <img
+              src="/screenshot-document-detail.png"
+              alt="A document detail view: the written 'why this recommendation', in your own language, with the recommendation state and quick actions."
+              className="mt-10 w-full rounded-2xl border border-gray-200 shadow-xl shadow-indigo-100/50"
+              loading="lazy"
+            />
+            <p className="mt-3 text-center text-xs text-gray-400">
+              Every document opens to a written &ldquo;why this recommendation&rdquo; — in your
+              profile&apos;s language.
+            </p>
+          </div>
+        </section>
+
+        {/* Features reframed to the benefit, icon beside each one. */}
+        <section className="mx-auto max-w-5xl px-4 py-16">
+          <h2 className="text-center text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            How it clears the noise
+          </h2>
+          <div className="mt-10 grid gap-6 sm:grid-cols-3">
+            <Feature
+              icon={<Target className="h-6 w-6 text-indigo-600" />}
+              title="Scored by what it adds to you"
+              body="Not generic popularity — Marginal Knowledge Value weighs each link against what you already know and what you're researching."
+            />
+            <Feature
+              icon={<Gauge className="h-6 w-6 text-indigo-600" />}
+              title="Worth it, maybe, or skip"
+              body="One clear verdict per link with a short reason, so you decide in seconds instead of hoarding tabs."
+            />
+            <Feature
+              icon={<UserCog className="h-6 w-6 text-indigo-600" />}
+              title="Tuned to your profile"
+              body="Describe your interests and what you already master once; every score adapts to you from then on."
+            />
+          </div>
+        </section>
+
+        {/* Open source & self-hostable — a selling point for a technical audience. */}
+        <section className="mx-auto max-w-5xl px-4 py-16">
+          <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-8 sm:p-10">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white">
+                  <Server className="h-3.5 w-3.5" />
+                  Open source · MIT
+                </div>
+                <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">
+                  Yours to run, fork, and reshape
+                </h2>
+                <p className="mt-3 text-gray-600">
+                  Fully serverless on AWS and built to be copied. Self-host it on your own account
+                  in about 20 minutes — your data stays with you, you tune the limits, and you swap
+                  the Bedrock model without touching the core.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col gap-3">
+                <a
+                  href={GITHUB_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-3 font-medium text-white hover:bg-gray-800"
+                >
+                  <GithubIcon className="h-4 w-4" /> View on GitHub
+                </a>
+                <a
+                  href={`${GITHUB_URL}/blob/main/INSTALL.md`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Self-host guide <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* The metric that matters: attention saved, not content stored. */}
@@ -197,84 +250,57 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="mx-auto max-w-5xl px-4 py-8 text-center text-sm text-gray-400">
-        Knowledge Inbox Zero
+      <footer className="border-t border-gray-100">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-gray-400 sm:flex-row">
+          <span>Knowledge Inbox Zero — built with Kiro on AWS serverless.</span>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-gray-900"
+          >
+            <GithubIcon className="h-4 w-4" /> Source on GitHub
+          </a>
+        </div>
       </footer>
     </div>
   );
 }
 
-// A sample library card for the hero demo. Pure presentational — mirrors the
-// real card's verdict badge + reason + reading time + MKV so the landing shows
-// the actual output, not a vague promise.
-const DEMO_VERDICTS = {
-  worth: {
-    label: 'Worth it',
-    badge: 'bg-emerald-100 text-emerald-800',
-    accent: 'border-l-emerald-500',
-  },
-  maybe: { label: 'Maybe', badge: 'bg-amber-100 text-amber-800', accent: 'border-l-amber-500' },
-  skip: { label: 'Skip', badge: 'bg-slate-200 text-slate-600', accent: 'border-l-slate-400' },
-} as const;
-
-function DemoCard({
-  title,
-  domain,
-  verdict,
-  reason,
-  minutes,
-  mkv,
-}: {
-  title: string;
-  domain: string;
-  verdict: keyof typeof DEMO_VERDICTS;
-  reason: string;
-  minutes: number;
-  mkv: number;
-}) {
-  const v = DEMO_VERDICTS[verdict];
-  const mkvTone =
-    mkv >= 67
-      ? 'bg-green-100 text-green-800'
-      : mkv >= 34
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-gray-100 text-gray-600';
+// A reframed benefit, icon beside the text so each feature reads as a row.
+function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div
-      className={`rounded-lg border border-l-4 border-gray-200 bg-white px-4 py-3 text-left ${v.accent}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
-            <span className="truncate">{domain}</span>
-            <span className="inline-flex items-center gap-0.5">
-              · <Clock className="h-3 w-3" /> {minutes} min
-            </span>
-          </p>
-        </div>
-        <span
-          className={`shrink-0 rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide ${v.badge}`}
-        >
-          {v.label}
-        </span>
+    <div className="flex gap-4 rounded-xl border border-gray-200 bg-white p-6">
+      <div className="shrink-0">{icon}</div>
+      <div>
+        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+        <p className="mt-2 text-sm text-gray-600">{body}</p>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-gray-600">{reason}</p>
-      <span
-        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${mkvTone}`}
-      >
-        <span className="text-[0.65rem] font-bold uppercase tracking-wide opacity-70">MKV</span>
-        {mkv}
-      </span>
     </div>
   );
 }
 
-function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+// A numbered step for the "How it works" section.
+function Step({
+  n,
+  icon,
+  title,
+  body,
+}: {
+  n: number;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6">
-      <div className="mb-3">{icon}</div>
-      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-sm font-bold text-indigo-600">
+          {n}
+        </span>
+        {icon}
+      </div>
+      <h3 className="mt-4 text-base font-semibold text-gray-900">{title}</h3>
       <p className="mt-2 text-sm text-gray-600">{body}</p>
     </div>
   );

@@ -40,7 +40,7 @@ export default function ProfilePage() {
         className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
       >
         <SlidersHorizontal className="h-4 w-4" />
-        Edit your knowledge profile &amp; data sources in Settings →
+        Edit your knowledge profile &amp; data sources →
       </Link>
 
       <p className="text-xs text-gray-400">Version {__APP_VERSION__}</p>

@@ -4,13 +4,15 @@ import {
   signIn,
   signOut,
   confirmSignIn,
+  confirmSignUp,
+  resendSignUpCode,
   resetPassword,
   confirmResetPassword,
   type SignInOutput,
 } from 'aws-amplify/auth';
 import { useAuth } from '../../context/AuthContext';
 
-type Step = 'CREDENTIALS' | 'NEW_PASSWORD' | 'RESET_PASSWORD';
+type Step = 'CREDENTIALS' | 'NEW_PASSWORD' | 'RESET_PASSWORD' | 'CONFIRM_SIGN_UP';
 
 interface LoginNavState {
   email?: string;
@@ -28,6 +30,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [resetCode, setResetCode] = useState('');
+  const [confirmCode, setConfirmCode] = useState('');
   const [resetDestination, setResetDestination] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,6 +47,19 @@ export default function LoginPage() {
           setResetDestination(out.nextStep.codeDeliveryDetails.destination ?? '');
         }
         setStep('RESET_PASSWORD');
+        return;
+      }
+      case 'CONFIRM_SIGN_UP': {
+        // The account was created but never email-confirmed, so Cognito blocks
+        // sign-in with this step. Resend a fresh code and let the user confirm
+        // inline instead of dead-ending on an "unsupported step" error.
+        try {
+          const out = await resendSignUpCode({ username: email });
+          setResetDestination(out.destination ?? '');
+        } catch {
+          /* a code may already be in flight; let the user enter it */
+        }
+        setStep('CONFIRM_SIGN_UP');
         return;
       }
       case 'DONE':
@@ -112,6 +128,23 @@ export default function LoginPage() {
       await advance(result);
     } catch (err) {
       setError((err as Error).message || 'Error resetting the password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Confirm an unconfirmed account from the login flow (Cognito returned
+  // CONFIRM_SIGN_UP), then retry sign-in with the credentials just entered.
+  const onConfirmSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await confirmSignUp({ username: email, confirmationCode: confirmCode });
+      const result = await signIn({ username: email, password });
+      await advance(result);
+    } catch (err) {
+      setError((err as Error).message || 'Could not confirm your account');
     } finally {
       setLoading(false);
     }
@@ -249,6 +282,28 @@ export default function LoginPage() {
             </Field>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <SubmitBtn loading={loading}>Reset and sign in</SubmitBtn>
+          </form>
+        )}
+
+        {step === 'CONFIRM_SIGN_UP' && (
+          <form onSubmit={onConfirmSignUp} className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Your account isn’t verified yet. Enter the code we sent
+              {resetDestination ? ` to ${resetDestination}` : ' to your email'} to finish signing
+              in.
+            </p>
+            <Field label="Verification code">
+              <input
+                value={confirmCode}
+                onChange={(e) => setConfirmCode(e.target.value.replace(/\s/g, ''))}
+                className="input text-center text-lg tracking-widest"
+                inputMode="numeric"
+                required
+                autoFocus
+              />
+            </Field>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <SubmitBtn loading={loading}>Confirm and sign in</SubmitBtn>
           </form>
         )}
 

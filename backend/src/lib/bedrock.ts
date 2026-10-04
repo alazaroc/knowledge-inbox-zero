@@ -2,6 +2,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { z } from 'zod';
 import {
   DIFFICULTY,
+  MAX_PROFILE_CONTEXT_CHARS as SHARED_MAX_PROFILE_CONTEXT_CHARS,
   type Extraction,
   type Profile,
   type RecommendationState,
@@ -25,17 +26,43 @@ const textDecoder = new TextDecoder();
  * backend lib (not `@app/shared`) because it is a server-only LLM contract.
  */
 export const extractionResponseSchema = z.object({
-  topics: z.array(z.string()).max(50),
-  concepts: z.array(z.string()).max(100),
-  claims: z.array(z.string()).max(50),
+  // These bounds are the app's OWN storage limits for a document's extracted
+  // metadata (how many tags/claims we keep), NOT user-entered data. The model
+  // occasionally returns a couple extra items; rejecting there wasted the whole
+  // extraction (the document went degraded and lost its image/metadata too), so
+  // we keep the analysis and drop the overflow. Order is preserved, so the most
+  // salient items — which the model lists first — survive the cut.
+  topics: z.array(z.string()).transform((a) => a.slice(0, 50)),
+  concepts: z.array(z.string()).transform((a) => a.slice(0, 100)),
+  claims: z.array(z.string()).transform((a) => a.slice(0, 50)),
   difficulty: z.enum(DIFFICULTY),
-  summary: z.string().max(500),
+  // Summary: if the model overshoots 500, cut at the last sentence/word boundary
+  // before the cap rather than mid-word, so it reads as a clean sentence.
+  summary: z.string().transform(clampSummary),
 });
+
+/** Trim an over-long summary at a sentence end (or last space) before 500. */
+function clampSummary(s: string): string {
+  if (s.length <= 500) return s;
+  const slice = s.slice(0, 500);
+  const sentenceEnd = Math.max(
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('! '),
+    slice.lastIndexOf('? ')
+  );
+  if (sentenceEnd >= 300) return slice.slice(0, sentenceEnd + 1);
+  const lastSpace = slice.lastIndexOf(' ');
+  return (lastSpace >= 300 ? slice.slice(0, lastSpace) : slice.slice(0, 499)).trimEnd() + '…';
+}
 
 export type ExtractionResponse = z.infer<typeof extractionResponseSchema>;
 
 export interface ExtractionRequest {
   text: string; // cleaned readable text, already truncated to 200k by the caller
+  // Owner profile — used ONLY to fix the output language of the human-readable
+  // `summary` (topics/concepts always stay English). Optional so callers that
+  // don't care about language (and existing tests) keep working.
+  profile?: Profile;
 }
 
 function modelId(): string {
@@ -44,6 +71,60 @@ function modelId(): string {
     throw new Error(`${MODEL_ID_ENV} env var is not set`);
   }
   return id;
+}
+
+// Throttling retry policy. Bedrock on-demand enforces a requests-per-minute
+// quota; during large import batches the worker bursts well above it, so a
+// transient ThrottlingException is EXPECTED, not terminal. We retry it here with
+// exponential backoff + full jitter so the document recovers inside the same
+// invocation instead of being degraded to "Couldn't analyze" and lost (there is
+// no automatic re-analysis). Non-throttling errors are NOT retried here — the
+// callers (extract/score) keep their own small content-level retry.
+const THROTTLE_MAX_RETRIES = 5;
+const THROTTLE_BASE_DELAY_MS = 1_000;
+const THROTTLE_MAX_DELAY_MS = 20_000;
+
+/** True when a Bedrock error is a throttling / rate-limit error worth retrying. */
+function isThrottlingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const name = err.name;
+  const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+  return (
+    name === 'ThrottlingException' ||
+    name === 'TooManyRequestsException' ||
+    name === 'ServiceQuotaExceededException' ||
+    status === 429
+  );
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Send an InvokeModel command, retrying ONLY on throttling with exponential
+ * backoff and full jitter. Honors the model's `Retry-After` hint when present.
+ */
+async function sendWithThrottleRetry(command: InvokeModelCommand) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await client.send(command);
+    } catch (err) {
+      if (!isThrottlingError(err) || attempt >= THROTTLE_MAX_RETRIES) throw err;
+      // Full jitter: random delay in [0, min(cap, base * 2^attempt)].
+      const ceil = Math.min(THROTTLE_MAX_DELAY_MS, THROTTLE_BASE_DELAY_MS * 2 ** attempt);
+      const delay = Math.floor(Math.random() * ceil);
+      attempt++;
+      console.warn(
+        JSON.stringify({
+          stage: 'bedrock-throttle',
+          attempt,
+          maxRetries: THROTTLE_MAX_RETRIES,
+          delayMs: delay,
+        })
+      );
+      await sleep(delay);
+    }
+  }
 }
 
 /**
@@ -61,7 +142,7 @@ async function invoke(prompt: string, maxTokens: number): Promise<string> {
     inferenceConfig: { maxTokens, temperature: 0 },
   });
 
-  const res = await client.send(
+  const res = await sendWithThrottleRetry(
     new InvokeModelCommand({
       modelId: modelId(),
       contentType: 'application/json',
@@ -94,9 +175,15 @@ function parseJsonObject(raw: string): unknown {
   let candidate = raw.trim();
 
   // Strip a Markdown code fence if the model added one despite instructions.
-  const fence = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) {
-    candidate = fence[1].trim();
+  // Handle BOTH a closed fence and an UNCLOSED one (the model opened ```json
+  // but the response was cut off before the closing ``` — a real failure we saw
+  // in prod). For the unclosed case we drop the opening fence line and let the
+  // balanced-brace fallback below recover the object.
+  const closedFence = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (closedFence) {
+    candidate = closedFence[1].trim();
+  } else {
+    candidate = candidate.replace(/^```(?:json)?\s*/i, '').trim();
   }
 
   // Fall back to the first balanced-looking `{...}` slice.
@@ -115,7 +202,9 @@ const EXTRACTION_INSTRUCTIONS = [
   'You analyze a document and extract structured knowledge.',
   'Return ONLY minified JSON (no markdown, no code fence, no prose) with EXACTLY these keys:',
   '{"topics":string[],"concepts":string[],"claims":string[],"difficulty":"INTRO"|"INTERMEDIATE"|"ADVANCED"|"EXPERT","summary":string}',
-  'Constraints: topics<=50, concepts<=100, claims<=50, summary<=500 characters.',
+  'Constraints: 3-12 topics, 5-20 concepts, up to 10 claims, summary<=500 characters. Prefer the MOST salient items; do not pad the lists.',
+  'CRITICAL: output raw JSON only. Do NOT wrap it in ```json fences or any prose — the response must start with { and end with }.',
+  'ALWAYS write "topics" and "concepts" in ENGLISH, regardless of the document language — they are a stable, filterable taxonomy (e.g. "AWS", "Cloud Computing", "Identity and Access Management"). Translate them to English when the source is in another language.',
   'difficulty MUST be one of INTRO, INTERMEDIATE, ADVANCED, EXPERT.',
 ].join('\n');
 
@@ -129,7 +218,7 @@ const EXTRACTION_INSTRUCTIONS = [
  * document Degraded (Req 4.5).
  */
 export async function bedrockExtract(req: ExtractionRequest): Promise<Extraction> {
-  const basePrompt = `${EXTRACTION_INSTRUCTIONS}\n\nDOCUMENT:\n${req.text}`;
+  const basePrompt = `${EXTRACTION_INSTRUCTIONS}${summaryLanguageInstruction(req.profile)}\n\nDOCUMENT:\n${req.text}`;
   const maxAttempts = 2; // 1 initial + 1 retry (token-cost control)
   let lastError: unknown;
 
@@ -140,7 +229,7 @@ export async function bedrockExtract(req: ExtractionRequest): Promise<Extraction
         : `${basePrompt}\n\nREMINDER: Your previous response was invalid. Respond with ONLY the minified JSON object described above and nothing else.`;
 
     try {
-      const raw = await invoke(prompt, 2048);
+      const raw = await invoke(prompt, 4096);
       const parsed = extractionResponseSchema.parse(parseJsonObject(raw));
       return {
         topics: parsed.topics,
@@ -185,6 +274,47 @@ export interface ScoreRequest {
   profile: Profile;
 }
 
+// Human-readable names for the forced-output languages. 'auto' is handled
+// separately (match the profile's own language) and has no entry here.
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  it: 'Italian',
+};
+
+/**
+ * Language instruction for the extraction's `summary` field only. The user
+ * asked for "What the content says" (the summary) to follow their chosen output
+ * language too. topics/concepts stay English (taxonomy). With an explicit
+ * language we force it; with 'auto' / no profile we add nothing — the extract
+ * prompt has no profile text to match, so it keeps its default (English),
+ * matching prior behaviour. Returns '' (no-op) or a leading-newline clause.
+ */
+function summaryLanguageInstruction(profile?: Profile): string {
+  const lang = profile?.outputLanguage ?? 'auto';
+  if (lang === 'auto') return '';
+  const name = LANGUAGE_NAMES[lang] ?? 'English';
+  return `\nWrite the "summary" field in ${name} (topics and concepts still in English). The rest of the JSON is unchanged.`;
+}
+
+/**
+ * Build the one-line instruction that fixes the language of the AI's written
+ * output, so explanations are not a per-document mix. 'auto' (or unset) keeps
+ * the explanation in the SAME language as the user's own profile text, which
+ * fixes the mixing without the user having to pick a language.
+ */
+function languageInstruction(profile: Profile): string {
+  const lang = profile.outputLanguage ?? 'auto';
+  if (lang === 'auto') {
+    return "Write the explanation text in the SAME LANGUAGE as the user's profile above (not the document's language). Keep it consistent across all documents.";
+  }
+  const name = LANGUAGE_NAMES[lang] ?? 'English';
+  return `Write the explanation text in ${name}, regardless of the document's or profile's language.`;
+}
+
 /**
  * Maximum number of characters of the free-text "About you" context sent into a
  * scoring/explain prompt. The schema allows up to 20,000 chars, but sending the
@@ -193,7 +323,7 @@ export interface ScoreRequest {
  * cheap; the user's full text is still stored intact. Tune this if a larger
  * context measurably improves scoring quality.
  */
-export const MAX_PROFILE_CONTEXT_CHARS = 2000;
+export const MAX_PROFILE_CONTEXT_CHARS = SHARED_MAX_PROFILE_CONTEXT_CHARS;
 
 /** Truncate the context to the cap, appending a short notice when cut. */
 function capContext(context: string): string {
@@ -256,7 +386,7 @@ export async function bedrockScore(req: ScoreRequest): Promise<BedrockScoreRespo
     difficulty: req.extraction.difficulty,
     summary: req.extraction.summary,
   });
-  const basePrompt = `${SCORING_INSTRUCTIONS}\n\nUSER PROFILE:\n${profileText}\n\nDOCUMENT:\n${docBlock}`;
+  const basePrompt = `${SCORING_INSTRUCTIONS}\n${languageInstruction(req.profile)}\n\nUSER PROFILE:\n${profileText}\n\nDOCUMENT:\n${docBlock}`;
   const maxAttempts = 2; // 1 initial + 1 retry (token-cost control)
   let lastError: unknown;
 
@@ -318,6 +448,7 @@ export async function bedrockExplain(input: ExplainInput): Promise<string> {
   const prompt = [
     'You explain a reading recommendation to a user in plain language.',
     'Write a single explanation between 50 and 1500 characters. No markdown, no headings, no JSON.',
+    languageInstruction(profile),
     'It MUST cover all three of:',
     '(a) why this document matters to THIS user given their profile,',
     '(b) what is genuinely new to this user,',

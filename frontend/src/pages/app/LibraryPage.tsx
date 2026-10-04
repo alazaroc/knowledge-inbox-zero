@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, ArchiveRestore, Clock, Trash2, AlertTriangle, Search } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Clock,
+  Trash2,
+  AlertTriangle,
+  Search,
+  Globe,
+  Star,
+  SlidersHorizontal,
+  RefreshCw,
+} from 'lucide-react';
 import type {
   KnowledgeDocument,
   LibraryResponse,
@@ -44,6 +55,9 @@ function failureHint(reason?: string): string {
   if (r.includes('429') || r.includes('too many requests') || r.includes('throttl'))
     return 'the service was rate-limited (try re-analyzing)';
   if (r.includes('no_readable_text')) return 'no readable text was found on the page';
+  if (r.includes('no_captions'))
+    return 'this video has no transcript we could read (captions were not accessible)';
+  if (r.includes('caption_fetch_failed')) return 'the video transcript could not be downloaded';
   if (r.includes('fetch_failed')) return 'the page could not be reached';
   if (r.includes('timeout')) return 'fetching the page timed out';
   return '';
@@ -100,8 +114,17 @@ export default function LibraryPage() {
   const [archivedView, setArchivedView] = useState<'active' | 'archived' | 'all'>('active');
   // Free-text filter over the loaded documents (title + domain + url).
   const [search, setSearch] = useState('');
-  // Optional recommendation-tag filter (FRESH/REFERENCE/REDUNDANT/OUTDATED).
+  // Optional recommendation-tag (signal) filter: FRESH/REFERENCE/REDUNDANT/OUTDATED.
   const [tagFilter, setTagFilter] = useState<RecommendationTag | null>(null);
+  // Optional source-site filter: show only the links from one domain.
+  const [siteFilter, setSiteFilter] = useState<string | null>(null);
+  // Optional topic filter: show only docs whose extraction topics include this.
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
+  // Show only starred ("to read / keep") documents.
+  const [starredOnly, setStarredOnly] = useState(false);
+  // #1: secondary filters (signals/site/topic/starred) are hidden behind a
+  // "Filters" button so the article list is what fills the first screen.
+  const [showFilters, setShowFilters] = useState(false);
   // Per-document in-flight lifecycle action (archive/delete) to disable buttons.
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -163,9 +186,56 @@ export default function LibraryPage() {
     }
   };
 
+  // Toggle the "to read / keep" star. Optimistic in-place update like archive;
+  // starring does not change the owner-wide counts.
+  const toggleStar = async (doc: KnowledgeDocument) => {
+    setBusyId(doc.documentId);
+    const nextStarred = !doc.starred;
+    try {
+      const updated = await api.patch<KnowledgeDocument>(`/documents/${doc.documentId}`, {
+        starred: nextStarred,
+      });
+      setDocuments((prev) =>
+        prev.map((d) => (d.documentId === doc.documentId ? { ...d, ...updated } : d))
+      );
+    } catch (err) {
+      setError((err as Error).message || 'Failed to update the document.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Re-queue a document for a fresh analysis against the CURRENT profile. The
+  // backend resets it to pending and the worker re-processes it; we optimistically
+  // mark it pending locally and re-sync the library once done is best-effort via
+  // a short poll so counts/scores reflect the new run.
+  const reanalyzeDoc = async (doc: KnowledgeDocument) => {
+    setBusyId(doc.documentId);
+    try {
+      await api.post(`/documents/${doc.documentId}/reanalyze`, {});
+      // Poll a few times until the document leaves pending/processing, then
+      // refresh the whole library so counts and ordering are correct.
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const fresh = await api.get<KnowledgeDocument>(`/documents/${doc.documentId}`);
+          if (fresh.status !== 'pending' && fresh.status !== 'processing') break;
+        } catch {
+          // Ignore transient read errors during polling.
+        }
+      }
+      await load(filter);
+    } catch (err) {
+      setError((err as Error).message || 'Failed to re-analyze the document.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   // Hard delete, with confirmation. The backend decrements the owner-wide
-  // counts, so we re-read them from the response is not possible (204) — we
-  // adjust locally instead and drop the row.
+  // counts authoritatively; rather than guess the per-state decrement locally
+  // (which drifts when the doc has no clean state), we re-read the library so
+  // every counter — total and the attention %  — reflects the real state.
   const deleteDoc = async (doc: KnowledgeDocument) => {
     const ok = window.confirm(
       'This permanently deletes the document. You may re-import it later. Continue?'
@@ -174,14 +244,10 @@ export default function LibraryPage() {
     setBusyId(doc.documentId);
     try {
       await api.delete(`/documents/${doc.documentId}`);
+      // Drop the row immediately for a responsive feel, then re-sync counts
+      // (and the list) from the backend so the counters never drift.
       setDocuments((prev) => prev.filter((d) => d.documentId !== doc.documentId));
-      setCounts((prev) => {
-        if (!prev) return prev;
-        const next = { ...prev, total: Math.max(0, prev.total - 1) };
-        const s = doc.recommendationState;
-        if (s && typeof next[s] === 'number') next[s] = Math.max(0, next[s] - 1);
-        return next;
-      });
+      await load(filter);
     } catch (err) {
       setError((err as Error).message || 'Failed to delete the document.');
     } finally {
@@ -205,9 +271,21 @@ export default function LibraryPage() {
       // A state tab never shows degraded docs (their state is not meaningful).
       filtered = filtered.filter((d) => !d.degraded);
     }
-    // Optional tag filter (FRESH/REFERENCE/REDUNDANT/OUTDATED).
+    // Optional source-site filter (one domain only).
+    if (siteFilter) {
+      filtered = filtered.filter((d) => (d.metadata?.sourceDomain ?? '') === siteFilter);
+    }
+    // Optional signal filter (FRESH/REFERENCE/REDUNDANT/OUTDATED).
     if (tagFilter) {
       filtered = filtered.filter((d) => d.tags?.includes(tagFilter));
+    }
+    // Optional topic filter (article subject, from the LLM extraction).
+    if (topicFilter) {
+      filtered = filtered.filter((d) => d.extraction?.topics?.includes(topicFilter));
+    }
+    // Starred-only ("to read / keep").
+    if (starredOnly) {
+      filtered = filtered.filter((d) => d.starred);
     }
     // Free-text search over title, domain and URL (case-insensitive).
     const q = search.trim().toLowerCase();
@@ -225,13 +303,47 @@ export default function LibraryPage() {
       });
     }
     return sortByValue(filtered);
-  }, [documents, archivedView, filter, search, tagFilter]);
+  }, [documents, archivedView, filter, search, siteFilter, topicFilter, starredOnly, tagFilter]);
+
+  // How many secondary filters are currently applied — shown on the "Filters"
+  // button so the user knows a filter is hiding results even when the panel is
+  // closed.
+  const activeFilterCount =
+    (tagFilter ? 1 : 0) + (siteFilter ? 1 : 0) + (topicFilter ? 1 : 0) + (starredOnly ? 1 : 0);
+
+  // Topics actually present across the loaded docs, with counts, most frequent
+  // first. Powers the "filter by topic" selector (article subjects, not the
+  // system freshness/redundancy signals).
+  const presentTopics = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of documents) {
+      for (const t of d.extraction?.topics ?? []) {
+        const topic = t.trim();
+        if (topic) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [documents]);
 
   // Tags actually present across the loaded docs, for the tag-filter chips.
+  // Signals (recommendation tags) actually present across the loaded docs.
+  // Powers the "Signals" filter chips — a dimension distinct from the state.
   const presentTags = useMemo(() => {
     const set = new Set<RecommendationTag>();
     for (const d of documents) for (const t of d.tags ?? []) set.add(t);
     return [...set];
+  }, [documents]);
+
+  // Source sites across the loaded docs, with per-site counts, most frequent
+  // first. Powers the "view only one site" selector (Req: a user with 100 links
+  // wants to see just the ones from a given site, not the mixed list).
+  const presentSites = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of documents) {
+      const site = d.metadata?.sourceDomain?.trim();
+      if (site) counts.set(site, (counts.get(site) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [documents]);
 
   const failedCount = useMemo(() => documents.filter((d) => d.degraded).length, [documents]);
@@ -283,100 +395,226 @@ export default function LibraryPage() {
         </div>
       ) : (
         <>
-          {/* Req 8.10: attention saved, prominent and on top. */}
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-6">
-            <p className="text-sm font-medium uppercase tracking-wide text-indigo-700">
-              Attention saved
-            </p>
-            <p className="mt-1 text-4xl font-bold text-indigo-900">
+          {/* Attention saved — compact single-line stat with an inline bar.
+              The old 4xl card ate ~25% of the first screen before any article;
+              this keeps the signal but gives the list the space. */}
+          <div className="flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50/60 px-4 py-2.5">
+            <span className="text-sm font-semibold text-indigo-900">
               {attentionSaved}
-              <span className="text-xl font-semibold text-indigo-500"> / {total}</span>
-            </p>
-            <p className="mt-1 text-sm text-indigo-700">
-              You saved attention on {attentionSaved} of {total} document
-              {total === 1 ? '' : 's'} ({savedPct}%) that didn&apos;t deserve it.
-            </p>
-          </div>
-
-          {/* Req 8.5: filter controls per state + "All", each with its count. */}
-          <div className="flex flex-wrap items-center gap-2">
-            {FILTERS.map((f) => {
-              const label =
-                f === 'ALL' ? 'All' : f === 'FAILED' ? "Couldn't analyze" : RECOMMENDATION_LABEL[f];
-              const count = f === 'ALL' ? counts!.total : f === 'FAILED' ? failedCount : counts![f];
-              const active = f === filter;
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  aria-pressed={active}
-                  className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-                    active
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {label}{' '}
-                  <span className={active ? 'text-indigo-100' : 'text-gray-400'}>({count})</span>
-                </button>
-              );
-            })}
-
-            {/* Archived visibility selector: active-only / archived-only / all.
-                Keeps archived documents from mixing into the main list. */}
-            <div className="ml-auto inline-flex items-center gap-1 rounded-lg bg-gray-100 p-0.5 text-xs">
-              {(['active', 'archived', 'all'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setArchivedView(v)}
-                  aria-pressed={archivedView === v}
-                  className={`rounded-md px-2.5 py-1 font-medium capitalize transition ${
-                    archivedView === v
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {v === 'archived' && archivedCount > 0 ? `Archived (${archivedCount})` : v}
-                </button>
-              ))}
+              <span className="font-medium text-indigo-500">/{total}</span>
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-indigo-100">
+              <div
+                className="h-full rounded-full bg-indigo-500"
+                style={{ width: `${savedPct}%` }}
+              />
             </div>
+            <span className="shrink-0 text-xs font-medium text-indigo-700">
+              {savedPct}% attention saved
+            </span>
           </div>
 
-          {/* Tag filter chips — only shown when documents carry tags. Click a
-              tag to filter; click again to clear. */}
-          {presentTags.length > 0 && (
+          {/* Primary filters — a single coherent group. Row 1: the recommendation
+              STATE (what the app thinks of each doc). Row 2: the lifecycle VIEW
+              (active / archived) on the left and the "more filters" toggle on
+              the right, kept at the SAME visual level so no control looks
+              second-class (#2). */}
+          <div className="space-y-2">
+            {/* Row 1 — recommendation state (Req 8.5). */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                Tags
-              </span>
-              {presentTags.map((t) => {
-                const active = tagFilter === t;
+              {FILTERS.map((f) => {
+                const label =
+                  f === 'ALL'
+                    ? 'All'
+                    : f === 'FAILED'
+                      ? "Couldn't analyze"
+                      : RECOMMENDATION_LABEL[f];
+                const count =
+                  f === 'ALL' ? counts!.total : f === 'FAILED' ? failedCount : counts![f];
+                const active = f === filter;
                 return (
                   <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTagFilter(active ? null : t)}
+                    key={f}
+                    onClick={() => setFilter(f)}
                     aria-pressed={active}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition ${
                       active
-                        ? 'bg-indigo-600 text-white ring-indigo-600'
-                        : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    {t}
+                    {label}{' '}
+                    <span className={active ? 'text-indigo-100' : 'text-gray-400'}>({count})</span>
                   </button>
                 );
               })}
-              {tagFilter && (
+            </div>
+
+            {/* Row 2 — lifecycle view + more filters, same level. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Active / Archived / All, now a labelled segmented control that
+                  reads as a peer of the state chips above. */}
+              <div className="inline-flex items-center gap-1 rounded-lg bg-gray-100 p-0.5 text-xs">
+                {(['active', 'archived', 'all'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setArchivedView(v)}
+                    aria-pressed={archivedView === v}
+                    className={`rounded-md px-3 py-1 font-medium capitalize transition ${
+                      archivedView === v
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {v === 'archived' && archivedCount > 0 ? `Archived (${archivedCount})` : v}
+                  </button>
+                ))}
+              </div>
+
+              {/* "More filters" (signals / site / topic / starred) on the right. */}
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                aria-expanded={showFilters}
+                className={`ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ring-1 transition ${
+                  showFilters || activeFilterCount > 0
+                    ? 'bg-indigo-50 text-indigo-700 ring-indigo-200'
+                    : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                More filters
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary filters — hidden by default (#1), revealed by "Filters". */}
+          {showFilters && (
+            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+              {/* Signal filter chips — the system's freshness/redundancy SIGNALS
+              (distinct from the Worth it/Maybe/Skip state). Click to filter. */}
+              {presentTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-xs font-medium uppercase tracking-wide text-gray-400"
+                    title="System signals about each link (how fresh, redundant, or reference-like it is) — a separate dimension from the Worth it / Maybe / Skip state."
+                  >
+                    Signals
+                  </span>
+                  {presentTags.map((t) => {
+                    const active = tagFilter === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTagFilter(active ? null : t)}
+                        aria-pressed={active}
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${
+                          active
+                            ? 'bg-indigo-600 text-white ring-indigo-600'
+                            : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                  {tagFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setTagFilter(null)}
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Source-site selector: narrow the list to a single domain so a big
+              library can be read one site at a time. Only shown with 2+ sites. */}
+              {presentSites.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                    <Globe className="h-3.5 w-3.5" /> Site
+                  </span>
+                  <select
+                    value={siteFilter ?? ''}
+                    onChange={(e) => setSiteFilter(e.target.value || null)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="">All sites ({presentSites.length})</option>
+                    {presentSites.map(([site, count]) => (
+                      <option key={site} value={site}>
+                        {site} ({count})
+                      </option>
+                    ))}
+                  </select>
+                  {siteFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setSiteFilter(null)}
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Topic selector: the article SUBJECTS (from the LLM extraction),
+              which is what most users mean by "tags". Only shown with 2+ topics. */}
+              {presentTopics.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    Topic
+                  </span>
+                  <select
+                    value={topicFilter ?? ''}
+                    onChange={(e) => setTopicFilter(e.target.value || null)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="">All topics ({presentTopics.length})</option>
+                    {presentTopics.map(([topic, count]) => (
+                      <option key={topic} value={topic}>
+                        {topic} ({count})
+                      </option>
+                    ))}
+                  </select>
+                  {topicFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setTopicFilter(null)}
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* "To read / keep" — show only starred documents. */}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setTagFilter(null)}
-                  className="text-xs text-gray-400 underline hover:text-gray-600"
+                  onClick={() => setStarredOnly((v) => !v)}
+                  aria-pressed={starredOnly}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                    starredOnly
+                      ? 'bg-amber-500 text-white ring-amber-500'
+                      : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                  }`}
                 >
-                  clear
+                  <Star className={`h-3.5 w-3.5 ${starredOnly ? 'fill-current' : ''}`} />
+                  To read / starred
                 </button>
-              )}
+              </div>
             </div>
           )}
 
@@ -411,7 +649,9 @@ export default function LibraryPage() {
                   <DocumentRow
                     doc={doc}
                     busy={busyId === doc.documentId}
+                    onToggleStar={() => void toggleStar(doc)}
                     onToggleArchive={() => void toggleArchive(doc)}
+                    onReanalyze={() => void reanalyzeDoc(doc)}
                     onDelete={() => void deleteDoc(doc)}
                   />
                 </li>
@@ -465,12 +705,16 @@ function LibrarySkeleton() {
 function DocumentRow({
   doc,
   busy,
+  onToggleStar,
   onToggleArchive,
+  onReanalyze,
   onDelete,
 }: {
   doc: KnowledgeDocument;
   busy: boolean;
+  onToggleStar: () => void;
   onToggleArchive: () => void;
+  onReanalyze: () => void;
   onDelete: () => void;
 }) {
   const title = doc.metadata?.title?.trim() || doc.canonicalUrl || doc.rawUrl;
@@ -497,10 +741,14 @@ function DocumentRow({
     fn();
   };
 
-  // --- Mobile swipe: left = Archive, right = Delete (with confirmation) ---
-  // Horizontal drag shifts the card; crossing the threshold on release fires the
-  // action. A mostly-vertical gesture is ignored so the page can still scroll.
-  const SWIPE_THRESHOLD = 72;
+  // --- Mobile swipe (user's scheme) ---
+  // Swipe LEFT  → partial = re-analyze, full = star ("to read"). Two left-side
+  //               thresholds let one gesture pick re-analyze vs star by distance.
+  // Swipe RIGHT → partial = archive, full = delete (confirms).
+  const ARCHIVE_THRESHOLD = 64; // right swipe past here = archive
+  const DELETE_THRESHOLD = 132; // right swipe past here = delete instead
+  const REANALYZE_THRESHOLD = 64; // left swipe past here = re-analyze
+  const STAR_THRESHOLD = 132; // left swipe past here (further) = star
   const startX = useRef(0);
   const startY = useRef(0);
   const dragging = useRef(false);
@@ -518,36 +766,66 @@ function DocumentRow({
     const deltaY = e.touches[0].clientY - startY.current;
     // Ignore vertical scrolls: only track once horizontal clearly dominates.
     if (Math.abs(deltaX) < Math.abs(deltaY)) return;
-    setDx(Math.max(-120, Math.min(120, deltaX)));
+    // Allow a longer drag on BOTH sides so each far threshold is reachable.
+    setDx(Math.max(-180, Math.min(180, deltaX)));
   };
   const onTouchEnd = () => {
     if (!dragging.current) return;
     dragging.current = false;
     const d = dx;
     setDx(0);
-    if (d <= -SWIPE_THRESHOLD)
-      onToggleArchive(); // swipe left → archive
-    else if (d >= SWIPE_THRESHOLD) onDelete(); // swipe right → delete (confirms)
+    if (d <= -STAR_THRESHOLD)
+      onToggleStar(); // long swipe left → star / "to read"
+    else if (d <= -REANALYZE_THRESHOLD)
+      onReanalyze(); // swipe left → re-analyze
+    else if (d >= DELETE_THRESHOLD)
+      onDelete(); // long swipe right → delete (confirms)
+    else if (d >= ARCHIVE_THRESHOLD) onToggleArchive(); // swipe right → archive
   };
 
   // Which action the current drag will reveal, for the colored backdrop.
-  const revealing = dx <= -1 ? 'archive' : dx >= 1 ? 'delete' : null;
+  const revealing =
+    dx <= -STAR_THRESHOLD
+      ? 'star'
+      : dx <= -1
+        ? 'reanalyze'
+        : dx >= DELETE_THRESHOLD
+          ? 'delete'
+          : dx >= 1
+            ? 'archive'
+            : null;
 
   return (
     <div className="relative overflow-hidden rounded-lg">
-      {/* Swipe backdrop (mobile only): shows the pending action under the card. */}
+      {/* Swipe backdrop (mobile only): shows the pending action under the card.
+          Left reveals Re-analyze, then Star past the longer threshold; right
+          reveals Archive, then Delete past the longer threshold. */}
       {revealing && (
         <div
           className={`pointer-events-none absolute inset-0 flex items-center px-5 text-sm font-semibold sm:hidden ${
-            revealing === 'archive'
-              ? 'justify-end bg-amber-100 text-amber-800'
-              : 'justify-start bg-red-100 text-red-700'
+            revealing === 'star'
+              ? 'justify-start bg-amber-100 text-amber-800'
+              : revealing === 'reanalyze'
+                ? 'justify-start bg-indigo-100 text-indigo-800'
+                : revealing === 'archive'
+                  ? 'justify-end bg-sky-100 text-sky-800'
+                  : 'justify-end bg-red-100 text-red-700'
           }`}
           aria-hidden="true"
         >
-          {revealing === 'archive' ? (
+          {revealing === 'star' ? (
+            <span className="inline-flex items-center gap-1">
+              <Star className="h-4 w-4" /> {doc.starred ? 'Unstar' : 'To read'}
+            </span>
+          ) : revealing === 'reanalyze' ? (
+            <span className="inline-flex items-center gap-1">
+              <RefreshCw className="h-4 w-4" /> Re-analyze
+              <span className="ml-1 text-xs font-normal opacity-70">· keep sliding to star</span>
+            </span>
+          ) : revealing === 'archive' ? (
             <span className="inline-flex items-center gap-1">
               <Archive className="h-4 w-4" /> {doc.archived ? 'Unarchive' : 'Archive'}
+              <span className="ml-1 text-xs font-normal opacity-70">· keep sliding to delete</span>
             </span>
           ) : (
             <span className="inline-flex items-center gap-1">
@@ -637,6 +915,28 @@ function DocumentRow({
         <div className="mt-2 flex items-center justify-between gap-3">
           {mkv !== null ? <MkvBadge value={mkv} /> : <span />}
           <div className="hidden items-center gap-1 sm:flex">
+            <button
+              type="button"
+              onClick={stop(onToggleStar)}
+              disabled={busy}
+              title={doc.starred ? 'Remove from “to read”' : 'Mark to read / keep'}
+              aria-pressed={doc.starred}
+              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium hover:bg-amber-50 disabled:opacity-50 ${
+                doc.starred ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'
+              }`}
+            >
+              <Star className={`h-3.5 w-3.5 ${doc.starred ? 'fill-current' : ''}`} />
+              {doc.starred ? 'Starred' : 'To read'}
+            </button>
+            <button
+              type="button"
+              onClick={stop(onReanalyze)}
+              disabled={busy}
+              title="Re-analyze this document against your current profile"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Re-analyze
+            </button>
             <button
               type="button"
               onClick={stop(onToggleArchive)}

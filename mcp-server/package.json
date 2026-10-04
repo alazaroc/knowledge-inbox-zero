@@ -1,0 +1,53 @@
+{
+  "name": "knowledge-inbox-zero-mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server exposing Knowledge Inbox Zero to any Kiro agent — a thin client of the deployed API (submit URLs, list recommendations, explain a document).",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "knowledge-inbox-zero",
+    "reading-list",
+    "recommendations",
+    "kiro"
+  ],
+  "homepage": "https://github.com/alazaroc/knowledge-inbox-zero/tree/main/mcp-server",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alazaroc/knowledge-inbox-zero.git",
+    "directory": "mcp-server"
+  },
+  "author": "Alejandro Lazaro Chueca",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "knowledge-inbox-zero-mcp-server": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1068.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

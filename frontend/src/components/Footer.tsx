@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import GithubIcon from './ui/GithubIcon';
 
-const APP_VERSION = 'v0.1.0';
+const APP_VERSION = 'v1.0.0';
 const REPO_URL = 'https://github.com/alazaroc/knowledge-inbox-zero';
 const BLOG_URL = 'https://www.playingaws.com';
 const GITHUB_URL = 'https://github.com/alazaroc';
@@ -21,6 +22,18 @@ export default function Footer() {
           >
             About
           </button>
+          <span aria-hidden className="text-gray-300">
+            ·
+          </span>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-gray-600 hover:text-indigo-600"
+          >
+            <GithubIcon className="h-3.5 w-3.5" />
+            GitHub
+          </a>
           <span aria-hidden className="text-gray-300">
             ·
           </span>

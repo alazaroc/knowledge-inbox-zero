@@ -1,9 +1,18 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { TABLE_NAMES, profileImportSchema, profileSchema, type Profile } from '@app/shared';
+import {
+  TABLE_NAMES,
+  MAX_PROFILE_CONTEXT_CHARS,
+  profileImportSchema,
+  profileSchema,
+  profileSyncSchema,
+  type Profile,
+} from '@app/shared';
 import { ddb } from '../lib/dynamo.js';
 import { bedrockDraftProfileFromText } from '../lib/bedrock.js';
-import { hasUserToken, setUserToken } from '../lib/profile-tokens.js';
+import { hasUserToken, setUserToken, getUserToken } from '../lib/profile-tokens.js';
+import { toRawGitHubUrl } from '../lib/github-url.js';
+import { readabilityExtract } from '../lib/retrieve.js';
 import { authenticate, parseBody } from '../lib/handler-utils.js';
 import { badRequest, ok, serverError } from '../lib/response.js';
 import { now } from '../lib/ids.js';
@@ -22,8 +31,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const method = event.httpMethod;
     const path = event.resource || event.path || '';
     const isImport = path.endsWith('/profile/import');
+    const isSync = path.endsWith('/profile/sync');
 
     if (method === 'POST' && isImport) return importProfile(event);
+    if (method === 'POST' && isSync) return syncProfile(event);
     if (method === 'GET') return getProfile(event);
     if (method === 'PUT') return putProfile(event);
 
@@ -92,6 +103,160 @@ async function importProfile(event: APIGatewayProxyEvent): Promise<APIGatewayPro
   return ok({ draft });
 }
 
+/**
+ * Fetch a "bring your own" source file's text. Normalizes a GitHub blob/repo
+ * URL to its raw-content URL, then fetches (with a bearer token for a private
+ * file). Returns the text, or throws an Error with a user-facing message.
+ */
+async function fetchSourceFile(rawInput: string, token?: string): Promise<string> {
+  const resolved = toRawGitHubUrl(rawInput);
+  if (!resolved) {
+    throw new Error(
+      'That looks like a repository page, not a file. Point at a single file, e.g. https://github.com/you/my-brain/blob/main/me/profile.md'
+    );
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), IMPORT_FETCH_TIMEOUT_MS);
+  timer.unref?.();
+  try {
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(resolved, { signal: ctrl.signal, redirect: 'follow', headers });
+    if (res.status === 404) {
+      throw new Error(
+        'File not found (HTTP 404). Check the path, branch, and that the token can read this repo.'
+      );
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        'Access denied (HTTP ' +
+          res.status +
+          '). The token is missing, wrong, or lacks read access to this repo.'
+      );
+    }
+    if (!res.ok) {
+      throw new Error(`The file could not be fetched (HTTP ${res.status}).`);
+    }
+    const contentType = res.headers.get('content-type') ?? '';
+    const raw = (await res.text()).trim();
+    if (!raw) throw new Error('The file is empty.');
+
+    // A GitHub raw .md is already clean text. A web page (content-type text/html,
+    // or a body that clearly starts as HTML) must be reduced to readable text —
+    // otherwise we store 50k of markup that both pollutes scoring and blows the
+    // 2000-char profile-context limit on save.
+    const looksHtml = /text\/html/i.test(contentType) || /^\s*<(?:!doctype|html|head)\b/i.test(raw);
+    const cleaned = looksHtml ? (readabilityExtract(raw, resolved).text ?? '').trim() : raw;
+    if (!cleaned) {
+      throw new Error(
+        'We could not extract readable text from that page. Point at a plain text or Markdown file instead.'
+      );
+    }
+    return cleaned.slice(0, IMPORT_FETCH_MAX_CHARS);
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('The file took too long to respond.');
+    }
+    throw err instanceof Error ? err : new Error('The file could not be fetched.');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * POST /profile/sync — "Bring your own": fetch the configured file LIVE (so the
+ * user can SEE it worked and WHAT was read), store that text as the profile
+ * snapshot (`context`), and return the extracted text for an in-page preview.
+ * The public URL takes priority over the private repo when both are present.
+ * A provided token is used for this fetch and, on success, stored; omitting it
+ * reuses the already-stored token.
+ */
+async function syncProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const auth = await authenticate(event);
+  if ('error' in auth) return auth.error;
+
+  const body = parseBody(event, profileSyncSchema);
+  if ('error' in body) return body.error;
+
+  const publicUrl = body.data.profileSourceUrl?.trim() ?? '';
+  const repoUrl = body.data.profileRepoUrl?.trim() ?? '';
+  const target = publicUrl || repoUrl;
+  if (!target) return badRequest('Add a file URL first, then sync.');
+
+  // A public URL needs no token; a private repo uses the provided token or the
+  // one already stored for this user.
+  let token: string | undefined;
+  if (!publicUrl && repoUrl) {
+    token = body.data.githubToken?.trim() || (await getUserToken(auth.ctx.sub));
+    if (!token) {
+      return badRequest(
+        'This looks like a private repo. Add a read-only token so we can read the file.'
+      );
+    }
+  }
+
+  let text: string;
+  try {
+    text = await fetchSourceFile(target, token);
+  } catch (err) {
+    return badRequest((err as Error).message);
+  }
+
+  // Cap the imported snapshot at the SAME shared limit as the manual About.
+  // When the source is longer we truncate but FLAG it, so the UI can tell the
+  // user plainly ("file is 10,234 chars — stored the first 8,000") instead of
+  // silently dropping the tail.
+  const originalLen = text.length;
+  const truncated = originalLen > MAX_PROFILE_CONTEXT_CHARS;
+  if (truncated) {
+    text = text.slice(0, MAX_PROFILE_CONTEXT_CHARS);
+  }
+
+  // Persist: the fetched text becomes the stored snapshot (`context`); the
+  // source URL(s) are kept so the user can re-sync later.
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAMES.PROFILES,
+      Key: { userId: auth.ctx.sub },
+    })
+  );
+  const prev = (existing.Item as Profile | undefined) ?? undefined;
+  const ts = now();
+  const profile: Profile = {
+    userId: auth.ctx.sub,
+    highInterests: prev?.highInterests ?? [],
+    mediumInterests: prev?.mediumInterests ?? [],
+    currentlyResearching: prev?.currentlyResearching ?? [],
+    alreadyKnown: prev?.alreadyKnown ?? [],
+    avoidContentTypes: prev?.avoidContentTypes ?? [],
+    activeContexts: prev?.activeContexts ?? [],
+    context: text,
+    profileSourceUrl: publicUrl,
+    profileRepoUrl: repoUrl,
+    outputLanguage: prev?.outputLanguage ?? 'auto',
+    createdAt: prev?.createdAt ?? ts,
+    updatedAt: ts,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE_NAMES.PROFILES, Item: profile }));
+
+  // Store a freshly provided token (private repo only).
+  if (!publicUrl && body.data.githubToken) {
+    await setUserToken(auth.ctx.sub, body.data.githubToken);
+  }
+  profile.hasToken = await hasUserToken(auth.ctx.sub);
+
+  return ok({
+    profile,
+    preview: {
+      text,
+      chars: text.length,
+      originalChars: originalLen,
+      truncated,
+      resolvedUrl: toRawGitHubUrl(target),
+    },
+  });
+}
+
 /** Builds the synthetic empty profile returned when the user has none (Req 1.4). */
 function emptyProfile(userId: string): Profile {
   const ts = now();
@@ -105,6 +270,7 @@ function emptyProfile(userId: string): Profile {
     activeContexts: [],
     context: '',
     profileSourceUrl: '',
+    outputLanguage: 'auto',
     notConfigured: true,
     createdAt: ts,
     updatedAt: ts,
@@ -159,6 +325,7 @@ async function putProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     context: body.data.context ?? '',
     profileSourceUrl: body.data.profileSourceUrl ?? '',
     profileRepoUrl: body.data.profileRepoUrl ?? '',
+    outputLanguage: body.data.outputLanguage,
     createdAt,
     updatedAt: ts,
   };

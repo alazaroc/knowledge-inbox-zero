@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "knowledge-inbox-zero": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "knowledge-inbox-zero-mcp-server@latest"],
+      "env": {
+        "KIZ_API_URL": "${KIZ_API_URL}",
+        "KIZ_ID_TOKEN": "${KIZ_ID_TOKEN}",
+        "KIZ_EMAIL": "${KIZ_EMAIL}",
+        "KIZ_PASSWORD": "${KIZ_PASSWORD}",
+        "KIZ_COGNITO_CLIENT_ID": "${KIZ_COGNITO_CLIENT_ID}",
+        "KIZ_COGNITO_REGION": "${KIZ_COGNITO_REGION}"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RECOMMENDATION_STATE, ROLES } from './constants.js';
+import { RECOMMENDATION_STATE, ROLES, MAX_PROFILE_CONTEXT_CHARS } from './constants.js';
 
 // Profile list entries: trim, drop empties (Req 1.7), cap length/count (Req 1.8).
 const trimmedEntry = z.string().transform((s) => s.trim());
@@ -22,8 +22,8 @@ export const profileSchema = z.object({
   context: z
     .string()
     .transform((s) => s.trim())
-    .refine((s) => s.length <= 2000, {
-      message: 'context exceeds 2000 characters',
+    .refine((s) => s.length <= MAX_PROFILE_CONTEXT_CHARS, {
+      message: `context exceeds ${MAX_PROFILE_CONTEXT_CHARS} characters`,
     })
     .optional(),
   // Optional PUBLIC raw URL of the user's own profile.md ("bring your own").
@@ -48,6 +48,9 @@ export const profileSchema = z.object({
     .transform((s) => s.trim())
     .refine((s) => s.length <= 400, { message: 'Token too long' })
     .optional(),
+  // Language the AI writes its recommendation explanations in. 'auto' matches
+  // the language of the user's profile text; the rest force that language.
+  outputLanguage: z.enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it']).default('auto'),
 });
 
 // Profile import (draft generation): give EITHER a public URL to fetch OR raw
@@ -87,11 +90,15 @@ export const libraryQuerySchema = z.object({
 export const documentPatchSchema = z
   .object({
     archived: z.boolean().optional(),
+    starred: z.boolean().optional(),
     userFeedback: z.enum(['up', 'down']).nullable().optional(),
   })
-  .refine((v) => v.archived !== undefined || v.userFeedback !== undefined, {
-    message: 'Nothing to update',
-  });
+  .refine(
+    (v) => v.archived !== undefined || v.starred !== undefined || v.userFeedback !== undefined,
+    {
+      message: 'Nothing to update',
+    }
+  );
 
 // ---------- Users (admin management) ----------
 // User creation by an admin (creates the Cognito user with a temporary password).
@@ -110,6 +117,30 @@ export const adminUpdateUserSchema = z
   .refine((v) => v.enabled !== undefined || v.role !== undefined, {
     message: 'Nothing to update',
   });
+
+// Profile sync (test & snapshot a "bring your own" source): give the file URL,
+// and OPTIONALLY a fresh token (used for this fetch and, on success, stored).
+// Omit `githubToken` to reuse an already-stored token. The handler fetches the
+// file live, returns the extracted text for the user to review, and saves it.
+export const profileSyncSchema = z.object({
+  profileSourceUrl: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s === '' || /^https:\/\/.+/.test(s), { message: 'Must be an https:// URL' })
+    .refine((s) => s.length <= 2000, { message: 'URL exceeds 2000 characters' })
+    .optional(),
+  profileRepoUrl: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s === '' || /^https:\/\/.+/.test(s), { message: 'Must be an https:// URL' })
+    .refine((s) => s.length <= 2000, { message: 'URL exceeds 2000 characters' })
+    .optional(),
+  githubToken: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s.length <= 400, { message: 'Token too long' })
+    .optional(),
+});
 
 // Inferred types
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;

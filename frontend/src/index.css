@@ -51,7 +51,7 @@ html {
     left: 0;
     right: 0;
     height: env(safe-area-inset-top);
-    background: #ffffff;
+    background: #fff;
     z-index: 40;
     pointer-events: none;
   }

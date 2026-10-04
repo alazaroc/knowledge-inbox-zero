@@ -23,6 +23,18 @@ FORCE_DEPLOY=${FORCE_DEPLOY:-false}
 PROJECT=knowledge-inbox-zero
 HASH_DIR=".deploy-hashes"
 
+# Custom domain for the frontend (CloudFront alias + ACM cert). The frontend
+# stack takes these as CDK context (-c domainName / -c certificateArn); without
+# them the distribution serves only its *.cloudfront.net name and a request to
+# the custom host fails TLS (no SAN match). Defaults wire the prod domain; the
+# ACM cert MUST live in us-east-1 for CloudFront. Override via env for other envs.
+DOMAIN_NAME="${DOMAIN_NAME:-inbox.playingaws.com}"
+CERTIFICATE_ARN="${CERTIFICATE_ARN:-arn:aws:acm:us-east-1:000345487168:certificate/5b74d918-955e-4fe7-8977-1c7cdb87140e}"
+DOMAIN_CTX=""
+if [ -n "$DOMAIN_NAME" ] && [ -n "$CERTIFICATE_ARN" ]; then
+  DOMAIN_CTX="-c domainName=$DOMAIN_NAME -c certificateArn=$CERTIFICATE_ARN"
+fi
+
 # Resolve the AWS profile/region ONCE and pass them explicitly to every CDK and
 # AWS CLI call below. Relying on an exported AWS_PROFILE/AWS_REGION in the caller's
 # shell is fragile: when they are absent, CDK falls back to the default credential
@@ -94,7 +106,7 @@ deploy_backend() {
   # token's lifetime.
   echo "▶ CDK synth (prebuild assembly, no AWS calls)"
   # shellcheck disable=SC2086
-  (cd infra/cdk && npx cdk synth --all -q -c env="$ENV" $AWS_PROFILE_ARG)
+  (cd infra/cdk && npx cdk synth --all -q -c env="$ENV" $DOMAIN_CTX $AWS_PROFILE_ARG)
 
   echo "▶ Deploy prebuilt assembly"
   # The CDK Node SDK does not refresh near-expiry SSO credentials the way the
@@ -107,10 +119,10 @@ deploy_backend() {
   # too old to support export-credentials.
   if cred_env=$(awscli configure export-credentials --format env-no-export 2>/dev/null) && [ -n "$cred_env" ]; then
     (cd infra/cdk && env $cred_env AWS_REGION="$AWS_REGION_VALUE" \
-      npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" --concurrency 4)
+      npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX --concurrency 4)
   else
     # shellcheck disable=SC2086
-    (cd infra/cdk && npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" --concurrency 4 $AWS_PROFILE_ARG)
+    (cd infra/cdk && npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX --concurrency 4 $AWS_PROFILE_ARG)
   fi
 
   mark "backend-$ENV" "$fp"

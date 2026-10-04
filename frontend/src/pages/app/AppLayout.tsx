@@ -15,11 +15,13 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import PageLoader from '../../components/ui/PageLoader';
 import Footer from '../../components/Footer';
+import VerifyEmailBanner from '../../components/VerifyEmailBanner';
 
+// Primary nav = the two everyday actions. Settings is onboarding-first but
+// rarely revisited, so it lives in the user dropdown (see below), not here.
 const NAV_ITEMS = [
   { to: '/app/library', label: 'Library', icon: Library },
   { to: '/app/add', label: 'Add content', icon: PlusCircle },
-  { to: '/app/settings', label: 'Settings', icon: SlidersHorizontal },
 ];
 
 export default function AppLayout() {
@@ -55,6 +57,16 @@ export default function AppLayout() {
       document.removeEventListener('keydown', onKey);
     };
   }, [userMenuOpen]);
+
+  // Close the mobile drawer on Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +119,7 @@ export default function AppLayout() {
             <Link to="/app" className="flex items-center gap-2 font-semibold text-gray-900">
               <img src="/logo.svg" alt="" className="h-6 w-6" />
               <span className="hidden sm:inline">Knowledge Inbox Zero</span>
+              <span className="sm:hidden">Inbox Zero</span>
             </Link>
             {!locked && (
               <nav className="hidden gap-1 text-sm sm:flex">
@@ -156,6 +169,15 @@ export default function AppLayout() {
                   <p className="text-xs text-gray-500">{user?.role}</p>
                 </div>
                 <NavLink
+                  to="/app/settings"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <SlidersHorizontal className="h-4 w-4 text-gray-500" />
+                  Knowledge profile
+                </NavLink>
+                <NavLink
                   to="/app/profile"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -181,25 +203,65 @@ export default function AppLayout() {
         </div>
       </header>
 
-      {/* Mobile nav drawer */}
-      {!locked && menuOpen && (
-        <nav className="border-b border-gray-200 bg-white sm:hidden">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-2 border-b border-gray-100 px-4 py-3 text-sm font-medium last:border-0 ${
-                  isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'
-                }`
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+      <VerifyEmailBanner />
+
+      {/* Mobile nav: native-feeling side drawer (slides in from the left) with a
+          dimmed overlay. Closes on overlay tap or Escape. Replaces the old
+          push-down panel so it behaves like a real mobile menu. */}
+      {!locked && (
+        <div
+          className={`fixed inset-0 z-40 sm:hidden ${menuOpen ? '' : 'pointer-events-none'}`}
+          aria-hidden={!menuOpen}
+        >
+          {/* Overlay */}
+          <div
+            onClick={() => setMenuOpen(false)}
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
+              menuOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          {/* Drawer panel */}
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className={`absolute left-0 top-0 flex h-full w-72 max-w-[80%] flex-col bg-white shadow-xl transition-transform duration-200 ease-out ${
+              menuOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <span className="flex items-center gap-2 font-semibold text-gray-900">
+                <img src="/logo.svg" alt="" className="h-6 w-6" />
+                Inbox Zero
+              </span>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="rounded p-1 text-gray-600 hover:bg-gray-100"
+                aria-label="Close menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav className="flex-1 py-2">
+              {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-3 text-sm font-medium ${
+                      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'
+                    }`
+                  }
+                >
+                  <Icon className="h-5 w-5" />
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+        </div>
       )}
 
       <main className="app-main flex-1">

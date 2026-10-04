@@ -248,6 +248,10 @@ async function patchDocument(event: APIGatewayProxyEvent): Promise<APIGatewayPro
     sets.push('archived = :archived');
     values[':archived'] = parsed.data.archived;
   }
+  if (parsed.data.starred !== undefined) {
+    sets.push('starred = :starred');
+    values[':starred'] = parsed.data.starred;
+  }
   if (parsed.data.userFeedback !== undefined) {
     if (parsed.data.userFeedback === null) {
       removes.push('userFeedback');

@@ -22,6 +22,7 @@ import {
 import { ddb } from '../lib/dynamo.js';
 import { retrieveReadable } from '../lib/retrieve.js';
 import { getUserToken } from '../lib/profile-tokens.js';
+import { toRawGitHubUrl } from '../lib/github-url.js';
 import { bedrockExtract, bedrockExplain, bedrockScore } from '../lib/bedrock.js';
 import { now } from '../lib/ids.js';
 
@@ -177,7 +178,7 @@ async function processDocument(msg: AnalysisMessage): Promise<void> {
         wordCount > 0 ? Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE)) : undefined;
 
       try {
-        const extracted = await bedrockExtract({ text });
+        const extracted = await bedrockExtract({ text, profile });
         extraction = { ...extracted, truncated, wordCount };
       } catch (err) {
         // Bounded retries already exhausted inside bedrockExtract → degrade.
@@ -276,6 +277,10 @@ async function processDocument(msg: AnalysisMessage): Promise<void> {
       publishedAt: got.metadata.publishedAt,
       now: nowDate,
     });
+    // NOTE: a DEGRADED document carries `degraded: true`; the Library's
+    // "Couldn't analyze" category keys off that flag (NOT the state), and the
+    // detail view hides the state pill when degraded. So we leave the computed
+    // state as-is and let the degraded flag drive the UI classification.
 
     // 7. Explanation. Prefer the LLM scoring reasoning (why it matters for this
     // user). When present we never leave "explanation unavailable" since the
@@ -410,8 +415,11 @@ async function resolveEffectiveProfile(profile: Profile): Promise<Profile> {
     try {
       const token = await getUserToken(profile.userId);
       if (token) {
-        const text = await fetchProfileSource(repoUrl, token);
-        if (text) return { ...profile, context: text };
+        const raw = toRawGitHubUrl(repoUrl);
+        if (raw) {
+          const text = await fetchProfileSource(raw, token);
+          if (text) return { ...profile, context: text };
+        }
       }
     } catch {
       // Ignore and try the public source / stored profile next.
@@ -423,7 +431,8 @@ async function resolveEffectiveProfile(profile: Profile): Promise<Profile> {
   if (!url || !/^https:\/\//i.test(url)) return profile;
 
   try {
-    const text = await fetchProfileSource(url);
+    const raw = toRawGitHubUrl(url) ?? url;
+    const text = await fetchProfileSource(raw);
     if (text) {
       // The fetched rich text becomes the primary "About you" signal; stored
       // list fields still ride along for the deterministic fallback.

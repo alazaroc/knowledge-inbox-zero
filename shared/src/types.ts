@@ -52,6 +52,7 @@ export interface Profile extends Timestamped {
   profileSourceUrl?: string; // optional public raw URL of the user's own profile.md
   profileRepoUrl?: string; // optional PRIVATE repo raw URL (token lives in Secrets Manager)
   hasToken?: boolean; // true when a private-repo token is stored for this user (read-only flag)
+  outputLanguage?: 'auto' | 'en' | 'es' | 'fr' | 'de' | 'pt' | 'it'; // AI explanation language
   notConfigured?: boolean; // true only for the synthetic empty profile (Req 1.4)
 }
 
@@ -104,6 +105,7 @@ export interface KnowledgeDocument extends Timestamped {
   explanationUnavailable?: boolean; // Req 6.6
   s3ContentRef?: string; // set when raw content >300KB (Req 4.7)
   archived?: boolean; // user lifecycle: archived documents are hidden by default
+  starred?: boolean; // user marked this to read / keep (★)
   userFeedback?: 'up' | 'down'; // user's thumbs up/down on the classification (signal only)
   readingMinutes?: number; // estimated reading time in minutes (from Extraction.wordCount)
 }

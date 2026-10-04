@@ -86,13 +86,13 @@ describe('scoresToRecommendationState — fully redundant (Req 6.1)', () => {
 // ===========================================================================
 
 describe('profileSchema — context length (Req 1.5)', () => {
-  it('accepts a context of exactly 2000 characters', () => {
-    const result = profileSchema.safeParse({ context: 'a'.repeat(2000) });
+  it('accepts a context of exactly 8000 characters', () => {
+    const result = profileSchema.safeParse({ context: 'a'.repeat(8000) });
     expect(result.success).toBe(true);
   });
 
-  it('rejects a context of 2001 characters', () => {
-    const result = profileSchema.safeParse({ context: 'a'.repeat(2001) });
+  it('rejects a context of 8001 characters', () => {
+    const result = profileSchema.safeParse({ context: 'a'.repeat(8001) });
     expect(result.success).toBe(false);
   });
 });

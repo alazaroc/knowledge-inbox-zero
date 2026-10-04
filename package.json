@@ -1,8 +1,8 @@
 {
-  "name": "serverless-monorepo-aws-starter",
+  "name": "knowledge-inbox-zero",
   "version": "1.0.0",
   "private": true,
-  "description": "Serverless monorepo starter on AWS (React + Vite + CDK + Cognito).",
+  "description": "Knowledge Inbox Zero — aggressively reduce your reading backlog. Serverless on AWS (React + Vite + CDK + Cognito + Bedrock).",
   "engines": {
     "node": ">=22"
   },
@@ -10,7 +10,8 @@
     "shared",
     "frontend",
     "backend",
-    "infra/cdk"
+    "infra/cdk",
+    "mcp-server"
   ],
   "scripts": {
     "build:shared": "npm run build -w shared",
@@ -49,7 +50,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alazaroc/serverless-monorepo-aws-starter.git"
+    "url": "https://github.com/alazaroc/knowledge-inbox-zero.git"
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [

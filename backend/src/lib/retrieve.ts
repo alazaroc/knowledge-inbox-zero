@@ -12,6 +12,14 @@ export interface RetrieveResult {
 
 const RETRIEVE_TIMEOUT_MS = 15_000; // Req 4.4
 
+// A desktop-browser User-Agent. Some hosts (notably YouTube from datacenter /
+// AWS IP ranges) serve a stripped page — without the player response that holds
+// the caption tracks — to non-browser or server clients. Presenting a real
+// browser UA + the EU consent cookie materially raises the hit rate for the
+// transcript path (it does not make it guaranteed from an AWS IP).
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 /**
  * Build metadata containing only the source domain, used whenever retrieval
  * fails or the content is not parseable (Req 4.5). Falls back gracefully if the
@@ -27,6 +35,147 @@ export function domainOnly(url: string): DocMetadata {
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
+}
+
+// --------------------------------------------------------------------------
+// YouTube transcript support (#1).
+// A YouTube URL has no readable article body, so instead of scraping the page
+// we fetch the video's TRANSCRIPT (its caption track) and feed THAT through the
+// same extract→score→explain pipeline. Captions are free text already, no
+// audio download or speech-to-text needed.
+// --------------------------------------------------------------------------
+
+/** Extract the 11-char video id from the common YouTube URL shapes, else null. */
+export function youtubeVideoId(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^www\./, '').toLowerCase();
+  if (host === 'youtu.be') {
+    const id = u.pathname.slice(1).split('/')[0];
+    return /^[\w-]{11}$/.test(id) ? id : null;
+  }
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    if (u.pathname === '/watch') {
+      const id = u.searchParams.get('v') ?? '';
+      return /^[\w-]{11}$/.test(id) ? id : null;
+    }
+    // /embed/<id>, /shorts/<id>, /live/<id>
+    const m = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Decode the handful of XML entities that appear in caption text. */
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)));
+}
+
+/**
+ * Fetch a YouTube video's transcript + title via the public watch page and the
+ * timedtext caption endpoint. No API key, no audio processing. Prefers a
+ * manually-authored caption track, else the first available (often auto-generated).
+ * Returns degraded when the video has no captions at all.
+ */
+async function retrieveYoutube(url: string, videoId: string): Promise<RetrieveResult> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RETRIEVE_TIMEOUT_MS);
+  timer.unref?.();
+  const metadata = domainOnly(url);
+  try {
+    // 1. Load the watch page to read the title and the caption-track list.
+    const page = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+      headers: {
+        'accept-language': 'en-US,en;q=0.9',
+        // Present as a real desktop browser and pre-accept the EU consent gate;
+        // otherwise YouTube (especially from datacenter IPs) serves a reduced
+        // page without the captionTracks we need (observed in prod: no_captions
+        // for videos that DO have captions). See BROWSER_UA.
+        'user-agent': BROWSER_UA,
+        cookie: 'CONSENT=YES+1',
+      },
+    });
+    if (!page.ok) return { metadata, degraded: true, reason: `http_${page.status}` };
+    const body = await page.text();
+
+    const titleMatch =
+      body.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i) ||
+      body.match(/<title>([^<]*)<\/title>/i);
+    if (titleMatch)
+      metadata.title = decodeXmlEntities(titleMatch[1])
+        .replace(/ - YouTube$/, '')
+        .trim();
+
+    // 2. Find caption tracks in the embedded player response JSON.
+    const tracks = extractCaptionTracks(body);
+    if (tracks.length === 0) {
+      return { metadata, degraded: true, reason: 'no_captions' };
+    }
+    // Prefer a manually-created track, else the first (usually auto-generated).
+    const chosen = tracks.find((t) => t.kind !== 'asr') ?? tracks[0];
+
+    // 3. Fetch the transcript XML and turn it into plain text.
+    const capRes = await fetch(chosen.baseUrl, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+      headers: { 'user-agent': BROWSER_UA, 'accept-language': 'en-US,en;q=0.9' },
+    });
+    if (!capRes.ok) return { metadata, degraded: true, reason: 'caption_fetch_failed' };
+    const xml = await capRes.text();
+    const lines = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) =>
+      decodeXmlEntities(m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')).trim()
+    );
+    const transcript = lines.filter(Boolean).join(' ');
+    if (!transcript.trim()) return { metadata, degraded: true, reason: 'no_readable_text' };
+
+    const titleLine = metadata.title ? `# ${metadata.title}\n\n` : '';
+    const text = `${titleLine}Video transcript:\n\n${transcript}`;
+    return { text, metadata, degraded: false };
+  } catch (err) {
+    return { metadata, degraded: true, reason: isAbortError(err) ? 'timeout' : 'fetch_failed' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Parse the captionTracks array out of a watch page's ytInitialPlayerResponse. */
+function extractCaptionTracks(html: string): { baseUrl: string; kind?: string }[] {
+  const marker = '"captionTracks":';
+  const at = html.indexOf(marker);
+  if (at === -1) return [];
+  // Slice from the array's opening bracket to its matching close.
+  const start = html.indexOf('[', at);
+  if (start === -1) return [];
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < html.length; i++) {
+    if (html[i] === '[') depth++;
+    else if (html[i] === ']' && --depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  if (end === -1) return [];
+  try {
+    const arr = JSON.parse(html.slice(start, end + 1)) as { baseUrl?: string; kind?: string }[];
+    return arr
+      .filter((t) => typeof t.baseUrl === 'string')
+      .map((t) => ({ baseUrl: t.baseUrl as string, kind: t.kind }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -67,7 +216,10 @@ function decodeBody(buffer: ArrayBuffer, contentType: string): string {
  * reads a stylesheet file from its package directory at runtime that esbuild
  * does not bundle (ENOENT /browser/default-stylesheet.css crashed the worker).
  */
-function readabilityExtract(html: string, url: string): { text?: string; metadata: DocMetadata } {
+export function readabilityExtract(
+  html: string,
+  url: string
+): { text?: string; metadata: DocMetadata } {
   const $ = cheerio.load(html);
 
   const metadata = domainOnly(url);
@@ -121,7 +273,12 @@ function readabilityExtract(html: string, url: string): { text?: string; metadat
       'section',
     ]) ?? $('body');
 
-  let text = normalizeWhitespace(container.text());
+  // Readable text as lightweight MARKDOWN: headings, paragraphs and list items
+  // keep their boundaries instead of being collapsed into one wall of text.
+  // Flattening with a single whitespace pass (the old behaviour) glued every
+  // block together, which both read badly in the profile preview and gave the
+  // model a structureless blob to reason over.
+  let text = structuredMarkdown($, container);
 
   // Fallback for landing/SaaS pages whose visible DOM is mostly chrome and
   // yields little text: synthesize a readable blob from metadata + headings +
@@ -165,11 +322,11 @@ function landingFallbackText($: cheerio.CheerioAPI, metadata: DocMetadata): stri
 function pickFirstNonEmpty(
   $: cheerio.CheerioAPI,
   selectors: string[]
-): cheerio.Cheerio<never> | undefined {
+): ReturnType<cheerio.CheerioAPI> | undefined {
   for (const sel of selectors) {
     const el = $(sel).first();
     if (el.length && normalizeWhitespace(el.text()).length > 120) {
-      return el as unknown as cheerio.Cheerio<never>;
+      return el;
     }
   }
   return undefined;
@@ -178,6 +335,57 @@ function pickFirstNonEmpty(
 /** Collapse runs of whitespace/newlines into single spaces and trim. */
 function normalizeWhitespace(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Serialize a content container into lightweight Markdown, preserving the
+ * block structure the plain-text pass used to destroy: headings become `#`
+ * lines, list items `- ` bullets, and paragraphs are separated by blank lines.
+ * Inline whitespace inside each block is still normalized, so the output is
+ * clean Markdown rather than raw HTML indentation.
+ */
+function structuredMarkdown(
+  $: cheerio.CheerioAPI,
+  container: ReturnType<cheerio.CheerioAPI>
+): string {
+  const blocks: string[] = [];
+  const seen = new Set<unknown>();
+
+  const push = (s: string) => {
+    const t = normalizeWhitespace(s);
+    if (t) blocks.push(t);
+  };
+
+  // Walk only block-level content nodes in document order. Nested blocks are
+  // de-duplicated via `seen` so a <p> inside a matched <section> is not emitted
+  // twice (once for the section text, once for itself).
+  container.find('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre').each((_, el) => {
+    if (seen.has(el)) return;
+    seen.add(el);
+    const tag = (el as { tagName?: string }).tagName?.toLowerCase() ?? '';
+    const raw = $(el).text();
+    const text = normalizeWhitespace(raw);
+    if (!text) return;
+
+    if (/^h[1-6]$/.test(tag)) {
+      const level = Number(tag[1]);
+      push(`${'#'.repeat(level)} ${text}`);
+    } else if (tag === 'li') {
+      push(`- ${text}`);
+    } else if (tag === 'blockquote') {
+      push(`> ${text}`);
+    } else if (tag === 'pre') {
+      push('```\n' + raw.trim() + '\n```');
+    } else {
+      push(text);
+    }
+  });
+
+  // No block-level children matched (rare, e.g. a <div>-only page): fall back
+  // to the flat text so we never return empty.
+  if (blocks.length === 0) return normalizeWhitespace(container.text());
+
+  return blocks.join('\n\n');
 }
 
 /**
@@ -220,6 +428,11 @@ function readPublishedAt($: cheerio.CheerioAPI): string | undefined {
  * types, dead/unreachable links, and documents with no readable text (Req 4.5).
  */
 export async function retrieveReadable(url: string): Promise<RetrieveResult> {
+  // #1: a YouTube URL has no article body — synthesize its content from the
+  // video transcript instead of scraping the player page.
+  const ytId = youtubeVideoId(url);
+  if (ytId) return retrieveYoutube(url, ytId);
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), RETRIEVE_TIMEOUT_MS); // Req 4.4
   // Never let a pending abort timer keep the Lambda/process event loop alive

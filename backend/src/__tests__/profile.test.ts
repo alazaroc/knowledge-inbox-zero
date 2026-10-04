@@ -175,8 +175,8 @@ describe('profile handler — PUT replace semantics (Req 1.3)', () => {
 });
 
 describe('profile handler — PUT validation rejection (Req 1.5, 1.8)', () => {
-  it('rejects a context longer than 2000 chars and persists nothing', async () => {
-    const res = await handler(event('PUT', { context: 'a'.repeat(2001) }));
+  it('rejects a context longer than 8000 chars and persists nothing', async () => {
+    const res = await handler(event('PUT', { context: 'a'.repeat(8001) }));
 
     expect(res.statusCode).toBe(400);
     // No DynamoDB interaction at all when the body fails validation.
