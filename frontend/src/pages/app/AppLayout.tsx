@@ -29,10 +29,13 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Onboarding-first gate: until a real profile exists, the only reachable
-  // app route is /app/settings (where the knowledge profile is edited). We
-  // check once on mount; SettingsPage flips the flag by re-fetching after a
-  // successful save, so we re-check on route change back out of settings.
+  // One-shot onboarding gate. We verify once on mount. After the first profile
+  // save, SettingsPage navigates away; while the profile is still unconfigured
+  // we re-verify on route changes and hold the gate in "checking" during that
+  // fetch, so we never redirect on a stale notConfigured value (the bug: going
+  // to the library right after the first save bounced back to settings because
+  // the async /profile fetch had not resolved yet). Once configured, we stop
+  // re-fetching on every navigation — no per-route loader, no extra call.
   const [checking, setChecking] = useState(true);
   const [notConfigured, setNotConfigured] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,12 +71,23 @@ export default function AppLayout() {
     return () => document.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
+  // While onboarding is still pending we re-verify on each route change and
+  // block with the loader until the fetch resolves (prevents the stale-state
+  // bounce). Once configured, the gate is satisfied for the rest of the session
+  // and we skip the per-navigation refetch entirely.
+  const configuredRef = useRef(false);
+
   useEffect(() => {
+    if (configuredRef.current) return; // already past onboarding — no refetch
     let active = true;
+    setChecking(true);
     (async () => {
       try {
         const profile = await api.get<Profile>('/profile');
-        if (active) setNotConfigured(Boolean(profile.notConfigured));
+        if (!active) return;
+        const stillNotConfigured = Boolean(profile.notConfigured);
+        setNotConfigured(stillNotConfigured);
+        if (!stillNotConfigured) configuredRef.current = true;
       } catch {
         // On a load error, don't trap the user — let them through.
         if (active) setNotConfigured(false);
@@ -84,7 +98,6 @@ export default function AppLayout() {
     return () => {
       active = false;
     };
-    // Re-run when leaving the profile page so the gate lifts right after save.
   }, [location.pathname]);
 
   const onLogout = async () => {

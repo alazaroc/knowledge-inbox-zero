@@ -99,7 +99,7 @@ export class KizApiClient {
 
   private async request<T>(method: string, path: string, body?: string): Promise<T> {
     const headers: Record<string, string> = {
-      Authorization: this.getIdToken(),
+      Authorization: `Bearer ${this.getIdToken()}`,
       Accept: 'application/json',
     };
     if (body !== undefined) headers['Content-Type'] = 'application/json';

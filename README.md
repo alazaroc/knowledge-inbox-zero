@@ -70,7 +70,9 @@ Every analyzed document gets:
   the image syntax used below.
 -->
 
-> **Demo video coming soon.** _(paste the video URL on its own line here)_
+▶️ **Watch the 3-minute demo** — profile → import → library → browser extension → MCP from an agent:
+
+[![Watch the Knowledge Inbox Zero demo on YouTube](https://img.youtube.com/vi/w5zU5v465N4/maxresdefault.jpg)](https://youtu.be/w5zU5v465N4)
 
 The **Library**, newest and most valuable first, with the headline _attention saved_ metric and per-state counts (Worth it / Maybe / Skip):
 

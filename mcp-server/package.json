@@ -1,6 +1,6 @@
 {
   "name": "knowledge-inbox-zero-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "MCP server exposing Knowledge Inbox Zero to any Kiro agent — a thin client of the deployed API (submit URLs, list recommendations, explain a document).",
   "keywords": [

@@ -108,9 +108,9 @@ test('handleSubmitUrls POSTs to /imports with newline-joined urls', async () => 
   assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
     urls: 'https://a.test\nhttps://b.test',
   });
-  // auth header forwarded
+  // auth header forwarded with the Bearer prefix (API Gateway JWT authorizer requires it)
   const headers = calls[0].init?.headers as Record<string, string>;
-  assert.equal(headers.Authorization, 'test-id-token');
+  assert.equal(headers.Authorization, 'Bearer test-id-token');
   // result
   const parsed = JSON.parse(res.content[0].text);
   assert.equal(parsed.batchId, 'b1');
