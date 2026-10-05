@@ -29,10 +29,10 @@
 
 ## Domains (one Lambda handler each)
 
-- **`profile`** (`/profile`): CRUD for the single per-user `Profile`. Deterministic. Never calls Bedrock.
+- **`profile`** (`/profile`): CRUD for the single per-user `Profile`. Deterministic, except `POST /profile/import`, which makes one Bedrock call to draft a profile from pasted text/CV (nothing is persisted; the draft only prefills the form).
 - **`imports`** (`/imports`, `/imports/{batchId}`): create batches from pasted URLs, canonicalize + dedup, enqueue analysis to SQS, serve batch progress. Deterministic. Never calls Bedrock.
 - **`documents`** (`/documents`, `/documents/{documentId}`): the library (grouped + per-state counts + pagination) and document detail. Read-only. Deterministic. Never calls Bedrock.
-- **`analysis-worker`**: SQS-triggered (not an API route). The full per-document pipeline — fetch → readability extract → Bedrock structured extraction → deterministic MKV scoring → Bedrock explanation → persist → atomic counter updates. **The only component that invokes Bedrock and writes to the content S3 bucket.**
+- **`analysis-worker`**: SQS-triggered (not an API route). The full per-document pipeline — fetch → readability extract → Bedrock structured extraction → deterministic MKV scoring → Bedrock explanation → persist → atomic counter updates. **The only component that writes to the content S3 bucket, and the only one that invokes Bedrock in the analysis pipeline** (the `profile` handler also calls Bedrock, but only to draft a profile — see above).
 - **`users`** (`/users`, `/users/me`, `/users/{username}`): Cognito user management (ADMIN-only except `/users/me`).
 
 ## Where things go

@@ -18,6 +18,12 @@ It optimizes for **attention saved**, not content stored.
 
 > **Not** a bookmark manager, **not** a read-it-later app, **not** an RSS reader. It doesn't help you save more — it helps you read less, on purpose.
 
+## Try it
+
+No install, no setup. **[Open the app](https://inbox.playingaws.com)**, sign up with your email, and paste a few links — you'll get back which ones are worth your time, and why.
+
+Want to run your own instance or hack on it? See [INSTALL.md](INSTALL.md) to self-host, or [CONTRIBUTING.md](CONTRIBUTING.md) to develop.
+
 ## Why
 
 - **Saves attention, not links.** The headline metric is how much reading you can safely skip, not how much you hoarded.
@@ -28,13 +34,12 @@ It optimizes for **attention saved**, not content stored.
 
 ## Contents
 
+- [Try it](#try-it)
 - [The idea: Marginal Knowledge Value](#the-idea-marginal-knowledge-value)
 - [How it works](#how-it-works)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
-- [Getting started](#getting-started)
-- [Everyday commands](#everyday-commands)
-- [Configuration](#configuration)
+- [Run your own / develop](#run-your-own--develop)
 - [Integrations (MCP & Kiro Power)](#integrations-mcp--kiro-power)
 - [Scope](#scope)
 - [Community](#community)
@@ -59,16 +64,6 @@ Every analyzed document gets:
 4. **Library** — Documents are grouped by recommendation with per-state counts, and **attention saved** is surfaced as the headline metric. Open any document for its full explanation.
 
 ## Screenshots
-
-<!--
-  VIDEO: GitHub renders an inline player when you paste a video URL on its own line.
-  Easiest way: open a GitHub issue (or a release), drag the .mp4 into the comment box,
-  copy the resulting https://user-images.githubusercontent.com/... (or /assets/...) URL,
-  and paste it below replacing this comment. Keep it on its own line.
-  A ~30–60s clip (add links → batch finishes → open the Library → read one explanation)
-  works best. Alternatively, record a GIF into docs/images/demo.gif and reference it with
-  the image syntax used below.
--->
 
 ▶️ **Watch the 3-minute demo** — profile → import → library → browser extension → MCP from an agent:
 
@@ -139,59 +134,22 @@ Default region `eu-south-2` (configurable).
 └── Makefile            # unified command interface
 ```
 
-## Getting started
+## Run your own / develop
 
-> **New here?** [INSTALL.md](INSTALL.md) covers both ways to use the app — the hosted web app (zero setup) or self-hosting on your own AWS account. This is the quick reference.
+The project is a reproducible npm-workspaces monorepo on AWS CDK, built to be copied. Full instructions — the hosted app vs. self-hosting, region/model choices, custom domain, and teardown — live in **[INSTALL.md](INSTALL.md)**.
 
-Prerequisites: Node.js ≥ 22, an AWS account, the AWS CLI configured, the AWS CDK bootstrapped, and Amazon Bedrock model access enabled for the configured model.
-
-```bash
-make install                         # npm ci — clean, reproducible install
-make build                           # build shared + backend + frontend
-```
-
-### Deploy and create your first user
+Quick start for local work (requires Node.js ≥ 22; self-hosting also needs an AWS account with CDK bootstrapped and Bedrock model access):
 
 ```bash
-cdk bootstrap aws://<account>/<region>              # once per account/region
-make deploy ENV=prod                                # storage + auth + api + frontend
-make create-admin EMAIL=you@email.com PASSWORD='Temp.123!' ENV=prod
-```
-
-On first login Cognito requires changing the password and setting up TOTP MFA. User creation is invite-only.
-
-### Run the frontend locally
-
-```bash
-make dev-env     # populate frontend/.env from SSM (needs AWS creds; run once after deploy)
+make install     # npm ci — clean, reproducible install
+make build       # build shared + backend + frontend
+make validate    # build + lint + css + typecheck + format + tests
 make dev         # Vite dev server against the deployed backend
 ```
 
-## Everyday commands
+`make help` lists every target (deploy, logs, user management, and more). Deploying to your own account and creating the first user is covered step by step in [INSTALL.md](INSTALL.md#option-b--self-host-on-your-own-aws-account).
 
-Run from the repo root — `make help` lists everything.
-
-```bash
-make validate                        # build shared + lint + css + typecheck + format + tests
-make test                            # backend (Jest) + frontend (Vitest)
-make fix                             # auto-fix lint + css + formatting
-
-make deploy ENV=prod                 # infra + frontend (skips unchanged components)
-make deploy-backend ENV=prod         # CDK only
-make deploy-frontend ENV=prod        # build + S3 sync + CloudFront invalidation
-
-make logs-lambdas ENV=prod TYPE=errors   # tail Lambda logs (MINS=30 default)
-make create-user EMAIL=x@email.com PASSWORD='Temp.123!' ROLE=USER ENV=prod
-```
-
-`scripts/deploy.sh` fingerprints version-controlled files and skips components that haven't changed (override with `FORCE_DEPLOY=true`).
-
-## Configuration
-
-- `BEDROCK_MODEL_ID` — the Bedrock foundation model (set at deploy time; a redeploy switches models without code changes).
-- `EMBEDDINGS_ENABLED` — Tier B semantic novelty via embeddings; defaults to `false`. V1 uses the deterministic concept-based path.
-
-CI runs `lint → test → build` (including `cdk synth`) on every push and deploys to `prod` on `main` via OIDC — no stored secrets. See [INSTALL.md](INSTALL.md) for region/model choices and the `AWS_ROLE_FOR_GITHUB_DEPLOYMENTS` setup.
+Two deploy-time knobs: `BEDROCK_MODEL_ID` (the Bedrock model, switchable with a redeploy) and `EMBEDDINGS_ENABLED` (Tier B semantic novelty, off by default). CI runs `lint → test → build` on every push and deploys to `prod` on `main` via OIDC — no stored secrets.
 
 ## Integrations (MCP & Kiro Power)
 
@@ -229,7 +187,7 @@ The one rule for new ideas: they should sharpen the core question — _what dese
 
 ---
 
-Built with [Kiro](https://kiro.dev) — spec-driven, with steering, hooks, MCP, a custom review agent, and property-based tests. See [docs/built-with-kiro.md](docs/built-with-kiro.md) for the full map.
+Built with [Kiro](https://kiro.dev) — spec-driven, with steering, hooks, MCP, a custom review agent, and property-based tests.
 
 ## License
 

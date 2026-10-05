@@ -2,6 +2,16 @@
 
 Thanks for your interest in Knowledge Inbox Zero! Contributions are welcome.
 
+## Try the app first
+
+Before contributing, [try the hosted app](https://inbox.playingaws.com) — it's the quickest way to understand what the product does and what it deliberately leaves out. It optimizes for _attention saved_, so the one question every change should sharpen is: _what deserves this user's attention, and why?_
+
+## Not sure where to start?
+
+- **An idea, question, or something to discuss?** Open a [GitHub Discussion](https://github.com/alazaroc/knowledge-inbox-zero/discussions) — good for anything that isn't yet a concrete bug or feature.
+- **A concrete bug or feature?** Open an [issue](https://github.com/alazaroc/knowledge-inbox-zero/issues) (see below).
+- **Code ready to go?** Open a pull request.
+
 ## Code of Conduct
 
 This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it.

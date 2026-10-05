@@ -25,7 +25,7 @@
 
 - **API**: API Gateway **HTTP API v2** with a Cognito JWT authorizer. Synchronous handlers run at 256 MB / 10 s timeout.
 - **Async analysis**: `imports` enqueues one **SQS** message per new document; the **`analysis-worker`** Lambda (1024 MB, 120 s timeout, reserved concurrency 5, partial-batch-failure reporting) consumes them. Queue visibility timeout 720 s (≥6× worker timeout); DLQ after `maxReceiveCount = 3`.
-- **AI**: Amazon **Bedrock** on-demand, single configurable model via `BEDROCK_MODEL_ID` (default `anthropic.claude-3-5-sonnet-20240620-v1:0`). Invoked only by the worker, only for extraction + explanation. `EMBEDDINGS_ENABLED` defaults to `false` (Tier B).
+- **AI**: Amazon **Bedrock** on-demand, single configurable model via `BEDROCK_MODEL_ID` (default `global.amazon.nova-2-lite-v1:0`, Amazon Nova 2 Lite via the GLOBAL inference profile). Invoked by the `analysis-worker` (structured extraction + written explanation) and by the `profile` handler (to draft a profile from imported text); every other handler is deterministic and never calls Bedrock. `EMBEDDINGS_ENABLED` defaults to `false` (Tier B).
 - **Storage**: DynamoDB PAY_PER_REQUEST (one table per entity, GSIs for owner/state/batch, atomic `ADD` counters), private S3 content bucket for large extracted text.
 
 ## Tooling & quality

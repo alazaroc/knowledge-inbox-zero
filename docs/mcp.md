@@ -179,9 +179,10 @@ Knowledge Inbox Zero", "what should I read?", "why is this one a SKIP?". See
 
 ## Testing
 
-A no-network test (`mcp-server/test/server.test.ts`, run with `node --test`)
+A no-network test suite (`mcp-server/test/server.test.ts`, run with `node --test`)
 asserts the three tool names and input schemas, validates each schema's
-accept/reject behavior, and exercises every handler against a stubbed `fetch`:
+accept/reject behavior, and exercises every handler against a stubbed `fetch`
+(15 tests):
 
 ```bash
 npm test -w mcp-server
