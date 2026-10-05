@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     # Skipped (not failed) until AWS_ROLE_FOR_GITHUB_DEPLOYMENTS is configured.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_ROLE_FOR_GITHUB_DEPLOYMENTS != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: prod
     env:
