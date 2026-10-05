@@ -3,8 +3,18 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop, "feature/**"]
+    # Skip CI/CD when a push touches ONLY docs. If a push also changes code,
+    # all paths must match for it to be ignored, so mixed commits still run.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
   workflow_dispatch:
 
 permissions:
