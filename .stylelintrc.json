@@ -8,6 +8,7 @@
       }
     ],
     "no-descending-specificity": null,
-    "declaration-block-no-redundant-longhand-properties": null
+    "declaration-block-no-redundant-longhand-properties": null,
+    "at-rule-prelude-no-invalid": null
   }
 }
