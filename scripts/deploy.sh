@@ -106,7 +106,7 @@ deploy_backend() {
   # token's lifetime.
   echo "▶ CDK synth (prebuild assembly, no AWS calls)"
   # shellcheck disable=SC2086
-  (cd infra/cdk && npx cdk synth --all -q -c env="$ENV" $DOMAIN_CTX $AWS_PROFILE_ARG)
+  (cd infra/cdk && npx cdk synth -q -c env="$ENV" $DOMAIN_CTX $AWS_PROFILE_ARG)
 
   echo "▶ Deploy prebuilt assembly"
   # The CDK Node SDK does not refresh near-expiry SSO credentials the way the

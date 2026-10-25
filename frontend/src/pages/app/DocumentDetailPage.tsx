@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -45,13 +45,18 @@ const SCORE_FIELDS: { key: keyof Scores; label: string; hint: string }[] = [
   { key: 'novelty', label: 'Novelty', hint: 'How much is new to you' },
   { key: 'redundancy', label: 'Redundancy', hint: 'Overlap with what you know' },
   { key: 'freshness', label: 'Freshness', hint: 'How recent the content is' },
-  { key: 'mkv', label: 'Priority (MKV)', hint: 'Overall marginal knowledge value' },
+  {
+    key: 'mkv',
+    label: 'Priority',
+    hint: 'Overall priority for you — how much it is worth your attention',
+  },
 ];
 
 export default function DocumentDetailPage() {
   // Route is /app/library/:documentId (registered in App.tsx by the routing agent).
   const { documentId } = useParams<{ documentId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Reading the session keeps the shared api client authenticated (Req 8.12);
   // the client attaches the token and handles retry/backoff on its own.
   useAuth();
@@ -64,6 +69,10 @@ export default function DocumentDetailPage() {
   // In-flight lifecycle (archive/delete) and feedback actions.
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  // Transient confirmation line shown after a thumbs up/down, so the user gets
+  // clear visual acknowledgement (the feedback is a learning signal applied to
+  // FUTURE analyses, so nothing changes on this doc's score right now).
+  const [feedbackNote, setFeedbackNote] = useState('');
 
   const load = async () => {
     if (!documentId) {
@@ -114,6 +123,30 @@ export default function DocumentDetailPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
+
+  // Deep-link action from the email digest's "Archive" link: ?action=archive.
+  // Once the doc has loaded, confirm with the user (archiving hides it from the
+  // library — reversible, but we never auto-mutate on arrival without a nod),
+  // archive it, then strip the param so a refresh doesn't re-trigger.
+  useEffect(() => {
+    if (searchParams.get('action') !== 'archive') return;
+    if (!doc || lifecycleBusy) return;
+    const clearParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    };
+    if (doc.archived) {
+      clearParam(); // already archived — nothing to do
+      return;
+    }
+    const title = doc.metadata?.title?.trim() || 'this document';
+    if (window.confirm(`Archive “${title}”? It will be hidden from your library.`)) {
+      void handleToggleArchive();
+    }
+    clearParam();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, searchParams]);
 
   // Toggle archived state via PATCH; archiving does not change owner-wide counts.
   // #5: when ARCHIVING (not un-archiving), close the document and go back to the
@@ -234,6 +267,13 @@ export default function DocumentDetailPage() {
         userFeedback: next,
       });
       setDoc(updated);
+      setFeedbackNote(
+        next === null
+          ? 'Feedback cleared.'
+          : next === 'up'
+            ? 'Thanks — I’ll prioritise more like this in future analyses.'
+            : 'Got it — I’ll show you less like this in future analyses.'
+      );
     } catch (err) {
       setError((err as Error).message || 'Failed to save your feedback.');
     } finally {
@@ -527,6 +567,11 @@ export default function DocumentDetailPage() {
                 <ThumbsDown className="h-4 w-4" /> No
               </button>
             </div>
+            {feedbackNote && (
+              <span className="text-xs font-medium text-emerald-600" role="status">
+                {feedbackNote}
+              </span>
+            )}
           </section>
           {doc.extraction && (
             <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-5">
@@ -600,8 +645,9 @@ export default function DocumentDetailPage() {
   );
 }
 
-// MKV (marginal knowledge value, 0-100) as a colored pill, shown next to the
-// recommendation verdict in the header. Green = high, amber = medium, gray = low.
+// Priority (internally MKV — marginal knowledge value, 0-100) as a colored
+// pill, shown next to the recommendation verdict in the header. "Priority" is
+// the user-facing word; "MKV" is internal. Green = high, amber = medium, gray = low.
 function HeaderMkvBadge({ value }: { value: number }) {
   const tone =
     value >= 67
@@ -612,9 +658,9 @@ function HeaderMkvBadge({ value }: { value: number }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ring-1 ${tone}`}
-      title="Marginal knowledge value (0–100) — the overall priority of this document for you."
+      title="Priority (0–100) — how much this document is worth your attention right now, given what you already know."
     >
-      <span className="text-[0.65rem] font-bold uppercase tracking-wide opacity-70">MKV</span>
+      <span className="text-[0.65rem] font-bold uppercase tracking-wide opacity-70">Priority</span>
       {value}
     </span>
   );

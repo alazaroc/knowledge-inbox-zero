@@ -3,6 +3,8 @@ import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import {
   TABLE_NAMES,
+  applyFeedbackAdjustment,
+  buildFeedbackSignals,
   computeFreshness,
   computeMkv,
   computeNovelty,
@@ -12,6 +14,7 @@ import {
   scoresToRecommendationState,
   type DocMetadata,
   type Extraction,
+  type FeedbackSignals,
   type KnowledgeDocument,
   type Profile,
   type RecommendationState,
@@ -137,11 +140,11 @@ async function processDocument(msg: AnalysisMessage): Promise<void> {
     }
 
     const profile = await getProfile(msg.ownerId);
-    const { priorConcepts, isExactDuplicate: isDup } = await getPriorContext(
-      msg.ownerId,
-      doc.canonicalUrl,
-      msg.documentId
-    );
+    const {
+      priorConcepts,
+      isExactDuplicate: isDup,
+      feedbackSignals,
+    } = await getPriorContext(msg.ownerId, doc.canonicalUrl, msg.documentId);
 
     // 3. Retrieve + extract readable content (15s bounded fetch inside).
     const got = await retrieveReadable(doc.canonicalUrl);
@@ -269,6 +272,29 @@ async function processDocument(msg: AnalysisMessage): Promise<void> {
         isDup,
         now: nowDate,
       });
+    }
+
+    // 5b. Deterministic feedback adjustment (Level 1, no LLM): nudge the MKV by
+    // the user's historical 👍/👎 on this document's domain and topics. A no-op
+    // for users who never gave feedback (f(0)=0). Applied here so relevance/
+    // novelty/redundancy stay the untouched AI verdict and only MKV (the
+    // priority) reflects "what this user actually keeps/rejects".
+    const adjustedMkv = applyFeedbackAdjustment(
+      scores.mkv,
+      feedbackSignals,
+      got.metadata.sourceDomain,
+      extraction?.topics ?? []
+    );
+    if (adjustedMkv !== scores.mkv) {
+      console.log(
+        JSON.stringify({
+          stage: 'feedback-adjust',
+          documentId: msg.documentId,
+          baseMkv: scores.mkv,
+          adjustedMkv,
+        })
+      );
+      scores = { ...scores, mkv: adjustedMkv };
     }
 
     // 6. Single recommendation state + advisory tags.
@@ -514,6 +540,12 @@ interface PriorContext {
    * the same canonical URL.
    */
   isExactDuplicate: boolean;
+  /**
+   * Aggregated 👍/👎 feedback the user gave on OTHER documents, keyed by domain
+   * and topic. Feeds the deterministic MKV feedback adjustment ("learn from
+   * you" without any LLM). Built in the SAME scan — no extra reads.
+   */
+  feedbackSignals: FeedbackSignals;
 }
 
 /**
@@ -533,6 +565,9 @@ async function getPriorContext(
 ): Promise<PriorContext> {
   const concepts = new Set<string>();
   let isExactDuplicate = false;
+  // Feedback is drawn from ALL the user's documents that carry a 👍/👎, not just
+  // completed ones, so we accumulate the raw items and build signals at the end.
+  const feedbackDocs: KnowledgeDocument[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
 
   do {
@@ -548,6 +583,7 @@ async function getPriorContext(
 
     for (const item of (r.Items ?? []) as KnowledgeDocument[]) {
       if (item.documentId === documentId) continue;
+      if (item.userFeedback === 'up' || item.userFeedback === 'down') feedbackDocs.push(item);
       if (item.status !== 'completed') continue;
       for (const c of item.extraction?.concepts ?? []) concepts.add(c);
       if (item.canonicalUrl === canonicalUrl) isExactDuplicate = true;
@@ -556,7 +592,11 @@ async function getPriorContext(
     exclusiveStartKey = r.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (exclusiveStartKey);
 
-  return { priorConcepts: [...concepts], isExactDuplicate };
+  return {
+    priorConcepts: [...concepts],
+    isExactDuplicate,
+    feedbackSignals: buildFeedbackSignals(feedbackDocs),
+  };
 }
 
 type CounterName = 'pending' | 'processing' | 'completed' | 'failed';

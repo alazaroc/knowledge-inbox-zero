@@ -34,9 +34,11 @@ jest.mock('../lib/retrieve.js', () => ({
 
 const bedrockExtract = jest.fn();
 const bedrockExplain = jest.fn();
+const bedrockScore = jest.fn();
 jest.mock('../lib/bedrock.js', () => ({
   bedrockExtract: (...a: unknown[]) => bedrockExtract(...a),
   bedrockExplain: (...a: unknown[]) => bedrockExplain(...a),
+  bedrockScore: (...a: unknown[]) => bedrockScore(...a),
 }));
 
 const s3Send = jest.fn();
@@ -76,6 +78,12 @@ beforeEach(() => {
   bedrockExplain.mockResolvedValue(
     'This is a sufficiently long explanation that satisfies the fifty character minimum requirement.'
   );
+  bedrockScore.mockResolvedValue({
+    relevance: 70,
+    novelty: 60,
+    redundancy: 20,
+    reasoning: 'Default mocked scoring reasoning for the property test.',
+  });
 });
 
 describe('analysis worker — Property 10: batch count conservation (Req 2.2, 3.3, 3.8, 3.10)', () => {

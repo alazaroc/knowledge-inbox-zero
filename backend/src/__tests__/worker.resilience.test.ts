@@ -27,9 +27,11 @@ jest.mock('../lib/retrieve.js', () => ({
 
 const bedrockExtract = jest.fn();
 const bedrockExplain = jest.fn();
+const bedrockScore = jest.fn();
 jest.mock('../lib/bedrock.js', () => ({
   bedrockExtract: (...a: unknown[]) => bedrockExtract(...a),
   bedrockExplain: (...a: unknown[]) => bedrockExplain(...a),
+  bedrockScore: (...a: unknown[]) => bedrockScore(...a),
 }));
 
 const s3Send = jest.fn();
@@ -86,6 +88,12 @@ beforeEach(() => {
   bedrockExplain.mockResolvedValue(
     'This explanation is comfortably longer than the fifty character minimum requirement.'
   );
+  bedrockScore.mockResolvedValue({
+    relevance: 70,
+    novelty: 60,
+    redundancy: 20,
+    reasoning: 'Default mocked scoring reasoning for the resilience test.',
+  });
 });
 
 describe('worker resilience — a failed document does not stop the batch (Req 3.6, 3.8, NFR-5)', () => {

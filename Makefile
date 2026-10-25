@@ -207,9 +207,18 @@ release:
 	git push --follow-tags && \
 	TAG=v$$(node -p "require('./package.json').version"); \
 	if gh repo view --json visibility -q .visibility 2>/dev/null | grep -q PUBLIC; then \
-	  URL=$$(gh release create "$$TAG" --generate-notes --draft --title "$$TAG") && \
+	  PREV=$$(git describe --tags --abbrev=0 "$$TAG^" 2>/dev/null); \
+	  if [ -n "$$PREV" ]; then RANGE="$$PREV..$$TAG"; else RANGE="$$TAG"; fi; \
+	  NOTES=$$(git log --no-merges --pretty='- %s' "$$RANGE" | grep -vE '^- Release v' || true); \
+	  if [ -z "$$NOTES" ]; then NOTES="- No notable changes."; fi; \
+	  BODY=$$(printf '## What'"'"'s Changed\n\n%s\n' "$$NOTES"); \
+	  if [ -n "$$PREV" ]; then \
+	    REPO=$$(gh repo view --json nameWithOwner -q .nameWithOwner); \
+	    BODY=$$(printf '%s\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s\n' "$$BODY" "$$REPO" "$$PREV" "$$TAG"); \
+	  fi; \
+	  URL=$$(gh release create "$$TAG" --notes "$$BODY" --draft --title "$$TAG") && \
 	  echo "" && \
-	  echo "📝 Draft GitHub Release created for public repo: $$TAG" && \
+	  echo "📝 Draft GitHub Release created from commits for public repo: $$TAG" && \
 	  echo "   Review and publish it manually at:" && \
 	  echo "   $$URL"; \
 	else \

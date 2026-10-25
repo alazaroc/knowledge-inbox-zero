@@ -88,6 +88,117 @@ export function computeMkv(s: Scores): number {
 }
 
 // ---------------------------------------------------------------------------
+// Feedback adjustment — Level 1: deterministic, no LLM (the app "learns from
+// you" without any inference cost).
+//
+// The user's 👍/👎 on past documents is aggregated into a signal per DOMAIN and
+// per TOPIC: a net count of (ups − downs) seen for documents of that source
+// domain / topic. A new document's MKV is then nudged by how the user has
+// historically reacted to its domain and topics — down if they keep rejecting
+// similar material, up (more gently) if they keep approving it.
+//
+// Pure and dependency-free so the same code is property-tested and run in the
+// worker. The nudge is BOUNDED and SATURATING so a flood of one-sided feedback
+// cannot swing the score arbitrarily, and it is applied AFTER computeMkv so the
+// underlying relevance/novelty/redundancy/mkv stay the untouched AI verdict.
+// ---------------------------------------------------------------------------
+
+/** Aggregated net feedback counts keyed by lowercased domain and topic. */
+export interface FeedbackSignals {
+  /** domain (lowercased) -> net (ups − downs) across the user's documents. */
+  byDomain: Map<string, number>;
+  /** topic (lowercased, trimmed) -> net (ups − downs). */
+  byTopic: Map<string, number>;
+}
+
+// Per-👎 penalty and per-👍 reward (points of MKV), applied to the SATURATING
+// net count. Downs weigh more than ups: a rejection is a stronger "stop showing
+// me this" signal than an approval is a "show me more", and we must never
+// inflate a genuinely low-value doc into a READ on approvals alone.
+const FEEDBACK_DOWN_WEIGHT = 8;
+const FEEDBACK_UP_WEIGHT = 4;
+// Saturation: the net count contributes through a smooth curve that caps each
+// axis' influence, so e.g. the 1st 👎 matters most and the 10th barely moves it.
+const FEEDBACK_SATURATION = 3;
+// Hard cap on the total adjustment (points), so feedback never dominates the
+// deterministic score — it nudges, it does not replace.
+const FEEDBACK_MAX_DELTA = 20;
+
+/** Smooth saturating transform: sign-preserving, |f(n)| < 1, f(0)=0. */
+function saturate(net: number): number {
+  return net / (Math.abs(net) + FEEDBACK_SATURATION);
+}
+
+/** Per-axis signed delta in MKV points from a net feedback count. */
+function axisDelta(net: number): number {
+  if (net === 0) return 0;
+  const weight = net > 0 ? FEEDBACK_UP_WEIGHT : FEEDBACK_DOWN_WEIGHT;
+  return saturate(net) * weight;
+}
+
+/**
+ * Adjust a document's MKV by the user's historical feedback on its domain and
+ * topics. Returns an integer 0..100. When there is no relevant feedback the
+ * input MKV is returned unchanged (f(0)=0), so this is a safe no-op for users
+ * who never gave feedback. Deterministic and monotonic in the net counts.
+ */
+export function applyFeedbackAdjustment(
+  mkv: number,
+  signals: FeedbackSignals,
+  docDomain: string | undefined,
+  docTopics: string[]
+): number {
+  let delta = 0;
+
+  const domain = docDomain?.trim().toLowerCase();
+  if (domain) delta += axisDelta(signals.byDomain.get(domain) ?? 0);
+
+  // Average the topic deltas so a doc with many topics is not over-penalized or
+  // over-rewarded relative to a single-topic doc.
+  const topics = normalizeConcepts(docTopics);
+  if (topics.size > 0) {
+    let topicDelta = 0;
+    for (const t of topics) topicDelta += axisDelta(signals.byTopic.get(t) ?? 0);
+    delta += topicDelta / topics.size;
+  }
+
+  // Bound the total nudge, then clamp the result into 0..100.
+  const bounded = Math.max(-FEEDBACK_MAX_DELTA, Math.min(FEEDBACK_MAX_DELTA, delta));
+  return clamp100(mkv + bounded);
+}
+
+/**
+ * Build the aggregated feedback signals from the user's documents. Only
+ * documents carrying an explicit `up`/`down` contribute. Pure helper so the
+ * worker can feed it the same `byOwner` scan it already performs — no extra
+ * reads. `self` (the document being scored) must be excluded by the caller.
+ */
+export function buildFeedbackSignals(
+  docs: Array<{
+    userFeedback?: 'up' | 'down';
+    metadata?: { sourceDomain?: string };
+    extraction?: { topics?: string[] };
+  }>
+): FeedbackSignals {
+  const byDomain = new Map<string, number>();
+  const byTopic = new Map<string, number>();
+
+  for (const d of docs) {
+    if (d.userFeedback !== 'up' && d.userFeedback !== 'down') continue;
+    const sign = d.userFeedback === 'up' ? 1 : -1;
+
+    const domain = d.metadata?.sourceDomain?.trim().toLowerCase();
+    if (domain) byDomain.set(domain, (byDomain.get(domain) ?? 0) + sign);
+
+    for (const t of normalizeConcepts(d.extraction?.topics ?? [])) {
+      byTopic.set(t, (byTopic.get(t) ?? 0) + sign);
+    }
+  }
+
+  return { byDomain, byTopic };
+}
+
+// ---------------------------------------------------------------------------
 // Recommendation state mapping (Req 6.1; CP-5, CP-9)
 // ---------------------------------------------------------------------------
 
