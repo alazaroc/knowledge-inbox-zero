@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ENV=${ENV:-prod}
-PROJECT=knowledge-inbox-zero
+PROJECT=read-worthy
 OUT=frontend/.env
 
 echo "→ Resolving '$ENV' endpoints from SSM"

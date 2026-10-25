@@ -98,44 +98,29 @@ export default function NotificationsPage() {
         </p>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={digestEnabled}
-            onChange={(e) => setDigestEnabled(e.target.checked)}
-            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <span>
-            <span className="block text-sm font-semibold text-gray-800">Weekly email digest</span>
-            <span className="block text-xs text-gray-500">
-              The week’s worth-reading links, plus your “to read” picks. We skip the email on a week
-              with nothing new.
+      <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+        {/* WEEKLY digest — its own card. The day + time controls live INSIDE,
+            shown only when it is on, so it's unambiguous they belong to Weekly. */}
+        <div className="rounded-lg border border-gray-200">
+          <label className="flex items-start gap-3 p-3">
+            <input
+              type="checkbox"
+              checked={digestEnabled}
+              onChange={(e) => setDigestEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-gray-800">Weekly email digest</span>
+              <span className="block text-xs text-gray-500">
+                The week’s worth-reading links, plus your “to read” picks. We skip the email on a
+                week with nothing new.
+              </span>
             </span>
-          </span>
-        </label>
-
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={monthlyDigestEnabled}
-            onChange={(e) => setMonthlyDigestEnabled(e.target.checked)}
-            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <span>
-            <span className="block text-sm font-semibold text-gray-800">Monthly email digest</span>
-            <span className="block text-xs text-gray-500">
-              On the last day of each month, everything still worth reading in your library — a
-              backlog review. Uses the same time + timezone below.
-            </span>
-          </span>
-        </label>
-
-        {anyDigest && (
-          <div className="flex flex-wrap items-end gap-4 pl-7">
-            {digestEnabled && (
+          </label>
+          {digestEnabled && (
+            <div className="flex flex-wrap items-end gap-4 border-t border-gray-100 bg-gray-50/60 p-3">
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-gray-600">Day (weekly)</span>
+                <span className="mb-1 block text-xs font-medium text-gray-600">Day of week</span>
                 <select
                   className="input cursor-pointer"
                   value={digestDay}
@@ -150,27 +135,79 @@ export default function NotificationsPage() {
                   <option value={0}>Sunday</option>
                 </select>
               </label>
-            )}
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Time</span>
+                <select
+                  className="input cursor-pointer"
+                  value={digestSlot}
+                  onChange={(e) => setDigestSlot(e.target.value as DigestSlot)}
+                >
+                  {digestSlotOptions(digestTimezone).map((o) => (
+                    <option key={o.slot} value={o.slot}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+
+        {/* MONTHLY digest — its own card. Its send day is FIXED (last day of the
+            month), so there is no day picker; only the time is editable, and it
+            lives inside this card so it's clearly the monthly time. */}
+        <div className="rounded-lg border border-gray-200">
+          <label className="flex items-start gap-3 p-3">
+            <input
+              type="checkbox"
+              checked={monthlyDigestEnabled}
+              onChange={(e) => setMonthlyDigestEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-gray-800">
+                Monthly email digest
+              </span>
+              <span className="block text-xs text-gray-500">
+                On the <strong>last day of each month</strong>, everything still worth reading in
+                your library — a backlog review.
+              </span>
+            </span>
+          </label>
+          {monthlyDigestEnabled && (
+            <div className="flex flex-wrap items-end gap-4 border-t border-gray-100 bg-gray-50/60 p-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Time</span>
+                <select
+                  className="input cursor-pointer"
+                  value={digestSlot}
+                  onChange={(e) => setDigestSlot(e.target.value as DigestSlot)}
+                >
+                  {digestSlotOptions(digestTimezone).map((o) => (
+                    <option key={o.slot} value={o.slot}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="w-full text-xs text-gray-400 sm:w-auto sm:flex-1 sm:min-w-48">
+                Sent on the last calendar day of every month at this time.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* TIMEZONE — shared by BOTH digests, so it sits on its own, clearly
+            labelled as applying to all emails (not nested under either one). */}
+        {anyDigest && (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/40 p-3">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-gray-600">
-                Time (your local time)
+                Timezone{' '}
+                <span className="font-normal text-gray-400">— applies to both digests</span>
               </span>
               <select
-                className="input cursor-pointer"
-                value={digestSlot}
-                onChange={(e) => setDigestSlot(e.target.value as DigestSlot)}
-              >
-                {digestSlotOptions(digestTimezone).map((o) => (
-                  <option key={o.slot} value={o.slot}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">Timezone</span>
-              <select
-                className="input cursor-pointer"
+                className="input cursor-pointer sm:w-80"
                 value={
                   COMMON_TIMEZONES.some((t) => t.value === digestTimezone)
                     ? digestTimezone
@@ -185,10 +222,9 @@ export default function NotificationsPage() {
                 ))}
               </select>
             </label>
-            <p className="w-full text-xs text-gray-400">
-              We send at three fixed moments a day; the times above are shown in your timezone, so
-              you always know when it really arrives. The monthly digest goes out at the same time
-              on the last day of the month.
+            <p className="mt-2 text-xs text-gray-400">
+              We send at a few fixed moments a day; the times above are shown in this timezone, so
+              you always know when an email really arrives.
             </p>
           </div>
         )}

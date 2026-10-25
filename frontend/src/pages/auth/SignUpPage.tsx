@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signUp, confirmSignUp, signIn, signOut } from 'aws-amplify/auth';
 import { useAuth } from '../../context/AuthContext';
+import GoogleSignIn from './GoogleSignIn';
 
 type Step = 'FORM' | 'CONFIRM';
 
@@ -130,6 +131,7 @@ export default function SignUpPage() {
             </Field>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <SubmitBtn loading={loading}>Sign up</SubmitBtn>
+            <GoogleSignIn label="Sign up with Google" />
           </form>
         )}
 

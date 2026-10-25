@@ -33,7 +33,7 @@
   "permissions": ["tabs", "storage"],
   "browser_specific_settings": {
     "gecko": {
-      "id": "knowledge-inbox-zero@playingaws",
+      "id": "read-worthy@playingaws",
       "strict_min_version": "121.0"
     }
   }

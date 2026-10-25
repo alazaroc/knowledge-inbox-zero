@@ -44,4 +44,4 @@ Every product decision answers one question: **"What deserves this user's attent
 
 - Environment: `prod` (the `test` environment is retired for now).
 - Default region: `eu-south-2` (configurable via the `eu-south-2` placeholder).
-- Two template placeholders remain repo-wide: `knowledge-inbox-zero` and `eu-south-2`. Internal package names use the fixed `@app/*` scope and are not renamed.
+- Two template placeholders remain repo-wide: `read-worthy` and `eu-south-2`. Internal package names use the fixed `@app/*` scope and are not renamed.

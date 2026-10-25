@@ -11,6 +11,7 @@ import {
   type SignInOutput,
 } from 'aws-amplify/auth';
 import { useAuth } from '../../context/AuthContext';
+import GoogleSignIn from './GoogleSignIn';
 
 type Step = 'CREDENTIALS' | 'NEW_PASSWORD' | 'RESET_PASSWORD' | 'CONFIRM_SIGN_UP';
 
@@ -224,6 +225,7 @@ export default function LoginPage() {
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <SubmitBtn loading={loading}>Sign in</SubmitBtn>
+            <GoogleSignIn label="Continue with Google" />
             <p className="text-center text-sm text-gray-500">
               No account yet?{' '}
               <Link to="/signup" className="font-medium text-indigo-600 hover:underline">

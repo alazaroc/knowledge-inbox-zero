@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   });
 
   const server = new McpServer({
-    name: 'knowledge-inbox-zero',
+    name: 'read-worthy',
     version: '1.0.1',
   });
 
@@ -43,12 +43,12 @@ async function main(): Promise<void> {
   await server.connect(transport);
 
   // stderr only — stdout is the MCP channel.
-  process.stderr.write('knowledge-inbox-zero MCP server ready on stdio\n');
+  process.stderr.write('read-worthy MCP server ready on stdio\n');
 }
 
 main().catch((err: unknown) => {
   const message =
     err instanceof ConfigError ? err.message : err instanceof Error ? err.stack : String(err);
-  process.stderr.write(`Failed to start knowledge-inbox-zero MCP server:\n${message}\n`);
+  process.stderr.write(`Failed to start read-worthy MCP server:\n${message}\n`);
   process.exit(1);
 });

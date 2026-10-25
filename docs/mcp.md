@@ -174,7 +174,7 @@ KIZ_COGNITO_CLIENT_ID="<app-client-id>" \
 node mcp-server/dist/index.js
 ```
 
-The server prints `knowledge-inbox-zero MCP server ready on stdio` to **stderr**
+The server prints `read-worthy MCP server ready on stdio` to **stderr**
 (stdout is the MCP channel) and then speaks MCP over stdio.
 
 ### Wire it into an MCP client
@@ -185,7 +185,7 @@ etc.):
 ```json
 {
   "mcpServers": {
-    "knowledge-inbox-zero": {
+    "read-worthy": {
       "command": "node",
       "args": ["/absolute/path/to/mcp-server/dist/index.js"],
       "env": {
@@ -239,7 +239,7 @@ Add it to `.kiro/settings/mcp.json` (project) or your user-level MCP config:
 ```json
 {
   "mcpServers": {
-    "knowledge-inbox-zero": {
+    "read-worthy": {
       "command": "node",
       "args": ["/absolute/path/to/mcp-server/dist/index.js"],
       "env": {
@@ -263,7 +263,7 @@ Same shape, in `claude_desktop_config.json` (macOS:
 ```json
 {
   "mcpServers": {
-    "knowledge-inbox-zero": {
+    "read-worthy": {
       "command": "node",
       "args": ["/absolute/path/to/mcp-server/dist/index.js"],
       "env": {

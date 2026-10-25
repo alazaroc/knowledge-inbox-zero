@@ -16,7 +16,7 @@ There are two ways to use this app. Pick the one that fits you.
 
 Nothing to install. Open the app and sign in:
 
-**https://inbox.playingaws.com**
+**https://read.playingaws.com**
 
 - Sign up with email + password (you'll confirm your email once).
 - Set your knowledge profile under **Settings** so scoring reflects what you care about.
@@ -47,7 +47,7 @@ credentials and account **you** configure. Nothing you deploy touches anyone els
 
 ```bash
 git clone https://github.com/alazaroc/read-worthy.git
-cd knowledge-inbox-zero
+cd read-worthy
 make install        # npm ci — clean, reproducible
 make build          # build shared + backend + frontend
 ```
@@ -131,11 +131,69 @@ own domain:
 
 3. Add an **A/AAAA alias** record for your domain pointing at the CloudFront distribution.
 
+## Optional: Google sign-in (SSO)
+
+Google sign-in is **fully optional and off by default**. With no Google
+credentials the auth stack deploys a plain email + password pool, so anyone who
+clones this repo gets a working app with none of our secrets baked in. Enable it
+only if you want it.
+
+**To enable it:**
+
+1. In the [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** of type _Web application_ (or reuse one).
+2. Under **Authorized redirect URIs**, add your Cognito Hosted UI callback:
+
+   ```
+   https://<hostedUiPrefix>.auth.<region>.amazoncognito.com/oauth2/idpresponse
+   ```
+
+   e.g. `https://read-worthy-auth-prod.auth.eu-south-2.amazoncognito.com/oauth2/idpresponse`.
+   This points at Cognito, **not** at your app, so it never changes when your app
+   domain changes.
+
+3. Copy the **Client ID** and **Client secret** from that screen.
+4. Store them **once** in SSM Parameter Store (the deploy picks them up on every
+   run — no secret on the command line):
+
+   ```bash
+   aws ssm put-parameter --name "/read-worthy/prod/google-client-id" \
+     --value "<your-client-id>" --type String --overwrite --region eu-south-2
+   aws ssm put-parameter --name "/read-worthy/prod/google-client-secret" \
+     --value "<your-client-secret>" --type SecureString --overwrite --region eu-south-2
+   ```
+
+   The secret is a **SecureString** (KMS-encrypted at rest); the client id is a
+   plain String (not a secret). Then deploy normally:
+
+   ```bash
+   AUTH_CALLBACK_URLS=https://read.yourdomain.com/ make deploy ENV=prod
+   ```
+
+   - `deploy.sh` reads both SSM params; if **both** are present it deploys **with**
+     Google SSO, otherwise **email-only**. A one-off `GOOGLE_CLIENT_ID` /
+     `GOOGLE_CLIENT_SECRET` env var overrides SSM when set.
+   - `HOSTED_UI_PREFIX` (optional env) — Cognito Hosted UI domain prefix; defaults
+     to `<project>-auth-<env>`. Must be globally unique within the region.
+   - `AUTH_CALLBACK_URLS` (optional env) — comma-separated app origins allowed as
+     OAuth redirect/logout targets; defaults to `http://localhost:5173/`. Set it
+     to your real app URL(s) in prod.
+
+When enabled, the deploy publishes the Hosted UI domain to SSM, the frontend
+build picks it up as `VITE_COGNITO_DOMAIN`, and a **"Continue with Google"**
+button appears on the Login and Sign-up screens.
+
+**To disable it (or keep it off):** delete the two SSM params (or never create
+them) and deploy. No Google identity provider, no Hosted UI domain, and the
+Google button is hidden — the app runs email + password only. (CDK detail:
+the `googleClientId` / `googleClientSecret` context values gate the whole Google
+path in `infra/cdk/lib/auth-stack.ts`; absent them it is skipped cleanly.)
+
 ## Making it yours (branding)
 
 - The footer "About" links point to the original author's blog/profile
   (`frontend/src/components/Footer.tsx`) — change these to your own.
-- `knowledge-inbox-zero` (project slug) and `eu-south-2` (region) are the repo-wide
+- `read-worthy` (project slug) and `eu-south-2` (region) are the repo-wide
   placeholders; the internal `@app/*` package names are fixed and not renamed.
 
 ## Tearing it down

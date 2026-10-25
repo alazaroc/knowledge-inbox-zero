@@ -7,7 +7,7 @@
 //   (b) set their own URL in the popup (stored in chrome.storage.sync),
 // so a fork never inherits the original author's instance.
 
-export const DEFAULT_BASE_URL = 'https://inbox.playingaws.com';
+export const DEFAULT_BASE_URL = 'https://read.playingaws.com';
 
 // The app route that reads ?url=&title= and preloads the "Add content" form
 // (frontend/src/pages/app/AddContentPage.tsx). The extension reuses this; it

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end deployment for knowledge-inbox-zero.
+# End-to-end deployment for read-worthy.
 #
 # Usage (default environment: prod):
 #   ./scripts/deploy.sh                  # deploy everything (infra + frontend)
@@ -20,7 +20,7 @@ set -euo pipefail
 ENV=${ENV:-prod}
 TARGET=${1:-all}
 FORCE_DEPLOY=${FORCE_DEPLOY:-false}
-PROJECT=knowledge-inbox-zero
+PROJECT=read-worthy
 HASH_DIR=".deploy-hashes"
 
 # Custom domain for the frontend (CloudFront alias + ACM cert). The frontend
@@ -28,12 +28,22 @@ HASH_DIR=".deploy-hashes"
 # them the distribution serves only its *.cloudfront.net name and a request to
 # the custom host fails TLS (no SAN match). Defaults wire the prod domain; the
 # ACM cert MUST live in us-east-1 for CloudFront. Override via env for other envs.
-DOMAIN_NAME="${DOMAIN_NAME:-inbox.playingaws.com}"
-CERTIFICATE_ARN="${CERTIFICATE_ARN:-arn:aws:acm:us-east-1:000345487168:certificate/5b74d918-955e-4fe7-8977-1c7cdb87140e}"
+DOMAIN_NAME="${DOMAIN_NAME:-read.playingaws.com}"
+# Wildcard *.playingaws.com cert in us-east-1 (covers read.playingaws.com).
+CERTIFICATE_ARN="${CERTIFICATE_ARN:-arn:aws:acm:us-east-1:000345487168:certificate/3b0d5c4a-15f8-4636-9a8f-f2bcd384ae7a}"
 DOMAIN_CTX=""
 if [ -n "$DOMAIN_NAME" ] && [ -n "$CERTIFICATE_ARN" ]; then
   DOMAIN_CTX="-c domainName=$DOMAIN_NAME -c certificateArn=$CERTIFICATE_ARN"
 fi
+
+# Optional Google SSO — resolved from SSM Parameter Store, not from the shell.
+# Store the Google OAuth web-client credentials ONCE:
+#   /read-worthy/<env>/google-client-id      (String)
+#   /read-worthy/<env>/google-client-secret  (SecureString, KMS-encrypted)
+# If BOTH exist, the auth stack deploys WITH Google SSO; if either is missing it
+# deploys email-only. Env-var overrides (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)
+# still win when set, so a one-off deploy without touching SSM is possible.
+# (Resolved below, AFTER the awscli() wrapper and AWS_PROFILE_ARG are defined.)
 
 # Resolve the AWS profile/region ONCE and pass them explicitly to every CDK and
 # AWS CLI call below. Relying on an exported AWS_PROFILE/AWS_REGION in the caller's
@@ -63,6 +73,35 @@ echo "→ Profile:     ${AWS_PROFILE:-<default chain>}"
 echo "→ Region:      ${AWS_REGION_VALUE}"
 
 mkdir -p "$HASH_DIR"
+
+# Optional Google SSO — resolved from SSM now that awscli()/profile are defined.
+GOOGLE_CTX=""
+GOOGLE_ID="${GOOGLE_CLIENT_ID:-}"
+GOOGLE_SECRET="${GOOGLE_CLIENT_SECRET:-}"
+if [ -z "$GOOGLE_ID" ]; then
+  GOOGLE_ID=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/google-client-id" \
+    --query Parameter.Value --output text 2>/dev/null || echo "")
+fi
+if [ -z "$GOOGLE_SECRET" ]; then
+  GOOGLE_SECRET=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/google-client-secret" \
+    --with-decryption --query Parameter.Value --output text 2>/dev/null || echo "")
+fi
+if [ -n "$GOOGLE_ID" ] && [ -n "$GOOGLE_SECRET" ]; then
+  echo "→ Google SSO: ENABLED (credentials found in SSM/env)"
+  GOOGLE_CTX="-c googleClientId=$GOOGLE_ID -c googleClientSecret=$GOOGLE_SECRET"
+  HOSTED_UI_PREFIX="${HOSTED_UI_PREFIX:-${PROJECT}-auth-${ENV}}"
+  GOOGLE_CTX="$GOOGLE_CTX -c hostedUiPrefix=$HOSTED_UI_PREFIX"
+  # OAuth callback/logout URLs. Default wires the prod domain (+ localhost for
+  # dev) so the Hosted UI accepts the app's redirect_uri; without this the client
+  # falls back to localhost-only and the Google redirect fails. The trailing
+  # slash MUST match what the frontend sends (`${window.location.origin}/`) —
+  # Cognito requires a byte-exact match, so "https://host" (no slash) is rejected
+  # as "RedirectUri is not registered". Override via env.
+  AUTH_CALLBACK_URLS="${AUTH_CALLBACK_URLS:-https://${DOMAIN_NAME}/,http://localhost:5173/}"
+  GOOGLE_CTX="$GOOGLE_CTX -c authCallbackUrls=$AUTH_CALLBACK_URLS"
+else
+  echo "→ Google SSO: disabled (no credentials in SSM/env) — email+password only"
+fi
 
 # Deterministic fingerprint of the given version-controlled paths (+ optional extra context).
 # Only considers git-tracked files, so node_modules/dist/cdk.out are excluded.
@@ -106,7 +145,7 @@ deploy_backend() {
   # token's lifetime.
   echo "▶ CDK synth (prebuild assembly, no AWS calls)"
   # shellcheck disable=SC2086
-  (cd infra/cdk && npx cdk synth -q -c env="$ENV" $DOMAIN_CTX $AWS_PROFILE_ARG)
+  (cd infra/cdk && npx cdk synth -q -c env="$ENV" $DOMAIN_CTX $GOOGLE_CTX $AWS_PROFILE_ARG)
 
   echo "▶ Deploy prebuilt assembly"
   # The CDK Node SDK does not refresh near-expiry SSO credentials the way the
@@ -119,10 +158,10 @@ deploy_backend() {
   # too old to support export-credentials.
   if cred_env=$(awscli configure export-credentials --format env-no-export 2>/dev/null) && [ -n "$cred_env" ]; then
     (cd infra/cdk && env $cred_env AWS_REGION="$AWS_REGION_VALUE" \
-      npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX --concurrency 4)
+      npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX $GOOGLE_CTX --concurrency 4)
   else
     # shellcheck disable=SC2086
-    (cd infra/cdk && npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX --concurrency 4 $AWS_PROFILE_ARG)
+    (cd infra/cdk && npx cdk deploy --all --app cdk.out --require-approval never -c env="$ENV" $DOMAIN_CTX $GOOGLE_CTX --concurrency 4 $AWS_PROFILE_ARG)
   fi
 
   mark "backend-$ENV" "$fp"
@@ -135,13 +174,17 @@ deploy_frontend() {
   USER_POOL_ID=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/user-pool-id" --query Parameter.Value --output text)
   USER_POOL_CLIENT_ID=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/user-pool-client-id" --query Parameter.Value --output text)
   API_URL=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/api-url" --query Parameter.Value --output text)
+  # Hosted UI domain is OPTIONAL — present only when Google SSO was deployed.
+  # Missing param must not abort the build, so swallow the error and default to "".
+  local COGNITO_DOMAIN
+  COGNITO_DOMAIN=$(awscli ssm get-parameter --name "/${PROJECT}/${ENV}/hosted-ui-domain" --query Parameter.Value --output text 2>/dev/null || echo "")
   BUCKET=$(awscli cloudformation describe-stacks --stack-name "${PROJECT}-frontend-${ENV}" \
     --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
   DIST_ID=$(awscli cloudformation describe-stacks --stack-name "${PROJECT}-frontend-${ENV}" \
     --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
 
   # Endpoints are baked into the build → if they change (e.g. a new API URL), redeploy.
-  fp=$(fingerprint "${API_URL}|${USER_POOL_ID}|${USER_POOL_CLIENT_ID}" frontend shared package-lock.json)
+  fp=$(fingerprint "${API_URL}|${USER_POOL_ID}|${USER_POOL_CLIENT_ID}|${COGNITO_DOMAIN}" frontend shared package-lock.json)
   if ! changed "frontend-$ENV" "$fp"; then
     echo "▶ Frontend unchanged — skipping (set FORCE_DEPLOY=true to force)"
     return
@@ -151,6 +194,7 @@ deploy_frontend() {
   VITE_USER_POOL_ID="$USER_POOL_ID" \
     VITE_USER_POOL_CLIENT_ID="$USER_POOL_CLIENT_ID" \
     VITE_API_URL="$API_URL" \
+    VITE_COGNITO_DOMAIN="$COGNITO_DOMAIN" \
     npm run build -w frontend
 
   echo "▶ Sync to s3://$BUCKET"

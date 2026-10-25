@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     JSON.stringify(
       {
         mcpServers: {
-          'knowledge-inbox-zero': {
+          'read-worthy': {
             command: 'node',
             args: ['/absolute/path/to/mcp-server/dist/index.js'],
             env: {

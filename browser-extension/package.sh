@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Package the browser extension into a store-ready zip.
-# Output: browser-extension/dist/knowledge-inbox-zero-extension-<version>.zip
+# Output: browser-extension/dist/read-worthy-extension-<version>.zip
 # Usage:  ./package.sh         (run from anywhere; resolves its own dir)
 set -euo pipefail
 
@@ -9,7 +9,7 @@ cd "$here"
 
 version="$(node -p "require('./manifest.json').version")"
 out_dir="dist"
-zip_name="knowledge-inbox-zero-extension-${version}.zip"
+zip_name="read-worthy-extension-${version}.zip"
 
 mkdir -p "$out_dir"
 rm -f "$out_dir/$zip_name"

@@ -334,7 +334,7 @@ export class ApiStack extends cdk.Stack {
     // from this stack's region.
     const digestFrom = process.env.DIGEST_FROM ?? 'Read Worthy <no-reply@playingaws.com>';
     const digestSesRegion = process.env.DIGEST_SES_REGION ?? 'eu-west-1';
-    const digestAppUrl = process.env.DIGEST_APP_URL ?? 'https://inbox.playingaws.com';
+    const digestAppUrl = process.env.DIGEST_APP_URL ?? 'https://read.playingaws.com';
 
     const digestFn = new NodejsFunction(this, 'DigestFn', {
       functionName: naming.standard('digest'),

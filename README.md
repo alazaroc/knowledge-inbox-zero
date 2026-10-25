@@ -6,7 +6,7 @@
 
 It optimizes for **attention saved**, not content stored.
 
-🌐 [Live app](https://inbox.playingaws.com) · 📦 [Self-host](INSTALL.md) · 🔌 [MCP & agents](docs/mcp.md)
+🌐 [Live app](https://read.playingaws.com) · 📦 [Self-host](INSTALL.md) · 🔌 [MCP & agents](docs/mcp.md)
 
 [![CI/CD Pipeline](https://github.com/alazaroc/read-worthy/actions/workflows/pipeline.yml/badge.svg)](https://github.com/alazaroc/read-worthy/actions/workflows/pipeline.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -20,7 +20,7 @@ It optimizes for **attention saved**, not content stored.
 
 ## Try it
 
-No install, no setup. **[Open the app](https://inbox.playingaws.com)**, sign up with your email, and paste a few links.
+No install, no setup. **[Open the app](https://read.playingaws.com)**, sign up with your email, and paste a few links.
 
 ## What makes it different
 

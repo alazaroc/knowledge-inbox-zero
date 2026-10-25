@@ -30,7 +30,7 @@ function sanitizeProject(raw: string): string {
 }
 
 const naming = new ResourceNaming({
-  project: sanitizeProject('knowledge-inbox-zero'),
+  project: sanitizeProject('read-worthy'),
   environment: env,
   account,
   version: '0.1.0',

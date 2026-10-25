@@ -1,12 +1,12 @@
 {
-  "name": "knowledge-inbox-zero-mcp-server",
+  "name": "read-worthy-mcp-server",
   "version": "1.0.1",
   "type": "module",
   "description": "MCP server exposing Read Worthy to any Kiro agent — a thin client of the deployed API (submit URLs, list recommendations, explain a document).",
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "knowledge-inbox-zero",
+    "read-worthy",
     "reading-list",
     "recommendations",
     "kiro"
@@ -23,7 +23,7 @@
     "node": ">=22"
   },
   "bin": {
-    "knowledge-inbox-zero-mcp-server": "dist/index.js",
+    "read-worthy-mcp-server": "dist/index.js",
     "kiz-login": "dist/login.js"
   },
   "main": "dist/index.js",

@@ -25,7 +25,7 @@ jest
 // environment (project slug + env), so resource names match production synth.
 function makeNaming(): ResourceNaming {
   return new ResourceNaming({
-    project: 'knowledge-inbox-zero',
+    project: 'read-worthy',
     environment: 'test',
     account: '123456789012',
     version: '0.1.0',
@@ -69,7 +69,7 @@ describe('StorageStack (DynamoDB + S3, no Lambda bundling)', () => {
     template.hasResourceProperties(
       'AWS::DynamoDB::Table',
       Match.objectLike({
-        TableName: 'knowledge-inbox-zero-documents-test',
+        TableName: 'read-worthy-documents-test',
         KeySchema: Match.arrayWith([{ AttributeName: 'documentId', KeyType: 'HASH' }]),
         GlobalSecondaryIndexes: Match.arrayWith([
           Match.objectLike({
@@ -103,7 +103,7 @@ describe('StorageStack (DynamoDB + S3, no Lambda bundling)', () => {
     template.hasResourceProperties(
       'AWS::DynamoDB::Table',
       Match.objectLike({
-        TableName: 'knowledge-inbox-zero-batches-test',
+        TableName: 'read-worthy-batches-test',
         KeySchema: Match.arrayWith([{ AttributeName: 'batchId', KeyType: 'HASH' }]),
         GlobalSecondaryIndexes: Match.arrayWith([
           Match.objectLike({
@@ -123,7 +123,7 @@ describe('StorageStack (DynamoDB + S3, no Lambda bundling)', () => {
     template.hasResourceProperties(
       'AWS::DynamoDB::Table',
       Match.objectLike({
-        TableName: 'knowledge-inbox-zero-profiles-test',
+        TableName: 'read-worthy-profiles-test',
         KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
         GlobalSecondaryIndexes: Match.absent(),
       })
@@ -135,7 +135,7 @@ describe('StorageStack (DynamoDB + S3, no Lambda bundling)', () => {
     template.hasResourceProperties(
       'AWS::S3::Bucket',
       Match.objectLike({
-        BucketName: 'knowledge-inbox-zero-content-test',
+        BucketName: 'read-worthy-content-test',
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -191,7 +191,7 @@ describeApi('ApiStack (SQS worker + DLQ + Bedrock IAM)', () => {
     template.hasResourceProperties(
       'AWS::Lambda::Function',
       Match.objectLike({
-        FunctionName: 'knowledge-inbox-zero-analysis-worker-test',
+        FunctionName: 'read-worthy-analysis-worker-test',
         Timeout: 120,
         MemorySize: 1024,
       })
@@ -203,7 +203,7 @@ describeApi('ApiStack (SQS worker + DLQ + Bedrock IAM)', () => {
     template.hasResourceProperties(
       'AWS::SQS::Queue',
       Match.objectLike({
-        QueueName: 'knowledge-inbox-zero-analysis-test',
+        QueueName: 'read-worthy-analysis-test',
         RedrivePolicy: Match.objectLike({
           maxReceiveCount: 3,
         }),

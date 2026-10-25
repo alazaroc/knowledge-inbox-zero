@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "knowledge-inbox-zero",
+  "name": "read-worthy",
   "version": "1.0.0",
   "description": "Connect any Kiro agent to a hosted Read Worthy: send URLs for analysis and read back which ones deserve attention (READ/SKIM/SKIP) with per-document explanations and MKV scores.",
   "author": {

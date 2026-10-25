@@ -32,7 +32,7 @@ KIZ_ID_TOKEN="<cognito-id-token>" \
 node mcp-server/dist/index.js
 ```
 
-It prints `knowledge-inbox-zero MCP server ready on stdio` to **stderr** (stdout
+It prints `read-worthy MCP server ready on stdio` to **stderr** (stdout
 is the MCP channel) and then speaks MCP.
 
 ## Configuration (environment only — no hardcoded URL/token/credentials)

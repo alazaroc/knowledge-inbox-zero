@@ -1,11 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# knowledge-inbox-zero — Makefile
+# read-worthy — Makefile
 # Thin wrappers over the npm scripts and the scripts/ helpers.
 # Environments: test | prod.  Default is prod (test env retired for now).
 # Overridable variables:  make deploy ENV=prod FORCE_DEPLOY=true
 # ─────────────────────────────────────────────────────────────────────────────
 
-PROJECT      := knowledge-inbox-zero
+PROJECT      := read-worthy
 REGION       ?= eu-south-2
 PROFILE      ?= webs
 ENV          ?= prod

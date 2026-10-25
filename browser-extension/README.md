@@ -58,7 +58,7 @@ the button is disabled for those.
 
 ## Point it at a different instance (self-hosters & forks)
 
-The default base URL is `https://inbox.playingaws.com`, but it is **fully
+The default base URL is `https://read.playingaws.com`, but it is **fully
 configurable without touching code** so a fork never inherits someone else's
 instance:
 
@@ -74,7 +74,7 @@ instance:
 ./package.sh          # or:  make extension-package   (from the repo root)
 ```
 
-Produces `dist/knowledge-inbox-zero-extension-<version>.zip`, ready to upload to
+Produces `dist/read-worthy-extension-<version>.zip`, ready to upload to
 the Chrome Web Store, Firefox AMO, or Edge Add-ons. **Publishing is up to you** —
 this repo does not publish anything.
 

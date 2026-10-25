@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ENV=${ENV:-prod}
-PROJECT=knowledge-inbox-zero
+PROJECT=read-worthy
 
 EMAIL=${1:?Missing EMAIL}
 PASSWORD=${2:?Missing PASSWORD (min 12 chars: upper, lower, digits and symbols)}

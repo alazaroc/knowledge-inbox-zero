@@ -4,7 +4,7 @@ Thanks for your interest in Read Worthy! Contributions are welcome.
 
 ## Try the app first
 
-Before contributing, [try the hosted app](https://inbox.playingaws.com) — it's the quickest way to understand what the product does and what it deliberately leaves out. It optimizes for _attention saved_, so the one question every change should sharpen is: _what deserves this user's attention, and why?_
+Before contributing, [try the hosted app](https://read.playingaws.com) — it's the quickest way to understand what the product does and what it deliberately leaves out. It optimizes for _attention saved_, so the one question every change should sharpen is: _what deserves this user's attention, and why?_
 
 ## Not sure where to start?
 
@@ -35,7 +35,7 @@ Requires Node.js ≥ 22. See [INSTALL.md](INSTALL.md) for the full AWS setup.
 
 ```bash
 git clone https://github.com/alazaroc/read-worthy.git
-cd knowledge-inbox-zero
+cd read-worthy
 
 make install        # npm ci — clean, reproducible
 make build          # build shared + backend + frontend

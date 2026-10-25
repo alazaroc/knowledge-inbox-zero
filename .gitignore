@@ -28,3 +28,7 @@ personal-data/
 !examples/sample-urls.txt
 !examples/README.md
 
+
+# Python bytecode (from one-off scripts)
+__pycache__/
+*.pyc

@@ -57,10 +57,10 @@ const getTableName = (key: string, defaultName: string) => {
 };
 
 export const TABLE_NAMES = {
-  USERS: getTableName('TABLE_USERS', 'knowledge-inbox-zero-users-test'),
-  PROFILES: getTableName('TABLE_PROFILES', 'knowledge-inbox-zero-profiles-test'),
-  BATCHES: getTableName('TABLE_BATCHES', 'knowledge-inbox-zero-batches-test'),
-  DOCUMENTS: getTableName('TABLE_DOCUMENTS', 'knowledge-inbox-zero-documents-test'),
+  USERS: getTableName('TABLE_USERS', 'read-worthy-users-test'),
+  PROFILES: getTableName('TABLE_PROFILES', 'read-worthy-profiles-test'),
+  BATCHES: getTableName('TABLE_BATCHES', 'read-worthy-batches-test'),
+  DOCUMENTS: getTableName('TABLE_DOCUMENTS', 'read-worthy-documents-test'),
 } as const;
 
 // Type names used as discriminators / in the audit log.
