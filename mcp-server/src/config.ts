@@ -1,12 +1,21 @@
 /**
  * Configuration for the Knowledge Inbox Zero MCP server.
  *
- * Everything comes from the environment — no flags, no files, no hardcoded
- * URLs/tokens/credentials. Two auth modes are supported:
+ * Everything comes from the environment — no flags and no hardcoded
+ * URLs/tokens/credentials. Auth has THREE modes, in order of how a serious
+ * integration should connect:
  *
- *   1. A ready-made Cognito id token:        KIZ_ID_TOKEN
- *   2. Email + password (USER_PASSWORD_AUTH): KIZ_EMAIL + KIZ_PASSWORD
- *                                             (+ KIZ_COGNITO_CLIENT_ID)
+ *   1. refresh-token (RECOMMENDED):  KIZ_REFRESH_TOKEN (+ KIZ_COGNITO_CLIENT_ID)
+ *      A long-lived Cognito refresh token (NOT your password; revocable, 30-day
+ *      lifetime) that the server exchanges for a fresh id token and silently
+ *      renews. Mint it once with `kiz-login` (see src/login.ts) — your password
+ *      is typed once and never stored. This is how OAuth-style MCP servers work.
+ *   2. password:                     KIZ_EMAIL + KIZ_PASSWORD (+ KIZ_COGNITO_CLIENT_ID)
+ *      USER_PASSWORD_AUTH at startup, renewed on demand. Convenient but keeps
+ *      your password in the environment/config — avoid for anything shared.
+ *   3. id-token:                     KIZ_ID_TOKEN
+ *      A ready-made id token for a quick test. It cannot be renewed (expires in
+ *      ~1h).
  *
  * `KIZ_API_URL` (the deployed HTTP API base URL) is always required.
  */
@@ -15,8 +24,9 @@ export interface KizConfig {
   apiUrl: string;
   // Exactly one auth strategy is resolved from the environment.
   auth:
-    | { kind: 'id-token'; idToken: string }
-    | { kind: 'password'; email: string; password: string; clientId: string; region: string };
+    | { kind: 'refresh-token'; refreshToken: string; clientId: string; region: string }
+    | { kind: 'password'; email: string; password: string; clientId: string; region: string }
+    | { kind: 'id-token'; idToken: string };
 }
 
 /** Thrown when required environment configuration is missing or inconsistent. */
@@ -33,6 +43,11 @@ function env(name: string, source: NodeJS.ProcessEnv): string | undefined {
   if (v === undefined) return undefined;
   const trimmed = v.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** The Cognito region, shared by the refresh-token and password modes. */
+function resolveRegion(source: NodeJS.ProcessEnv): string {
+  return env('KIZ_COGNITO_REGION', source) ?? env('AWS_REGION', source) ?? 'eu-south-2';
 }
 
 /**
@@ -55,16 +70,32 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): KizConfig {
     throw new ConfigError(`KIZ_API_URL must be an http(s) URL, got: ${apiUrl}`);
   }
 
+  // ── 1. refresh-token mode (recommended — no password on disk) ──────────────
+  const refreshToken = env('KIZ_REFRESH_TOKEN', source);
+  if (refreshToken) {
+    const clientId = env('KIZ_COGNITO_CLIENT_ID', source);
+    if (!clientId) {
+      throw new ConfigError(
+        'KIZ_REFRESH_TOKEN requires KIZ_COGNITO_CLIENT_ID (the Cognito app client id the ' +
+          'refresh token was issued for). Run `kiz-login` to mint both.'
+      );
+    }
+    return {
+      apiUrl: stripTrailingSlash(apiUrl),
+      auth: { kind: 'refresh-token', refreshToken, clientId, region: resolveRegion(source) },
+    };
+  }
+
+  // ── 2. id-token mode (quick test; not renewable) ───────────────────────────
   const idToken = env('KIZ_ID_TOKEN', source);
   if (idToken) {
     return { apiUrl: stripTrailingSlash(apiUrl), auth: { kind: 'id-token', idToken } };
   }
 
+  // ── 3. password mode (convenient; keeps a password in the environment) ─────
   const email = env('KIZ_EMAIL', source);
   const password = env('KIZ_PASSWORD', source);
   const clientId = env('KIZ_COGNITO_CLIENT_ID', source);
-  // Default region matches the project default (eu-south-2); overridable.
-  const region = env('KIZ_COGNITO_REGION', source) ?? env('AWS_REGION', source) ?? 'eu-south-2';
 
   if (email && password) {
     if (!clientId) {
@@ -75,14 +106,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): KizConfig {
     }
     return {
       apiUrl: stripTrailingSlash(apiUrl),
-      auth: { kind: 'password', email, password, clientId, region },
+      auth: { kind: 'password', email, password, clientId, region: resolveRegion(source) },
     };
   }
 
   throw new ConfigError(
-    'No authentication configured. Provide KIZ_ID_TOKEN (a Cognito id token), OR ' +
-      'KIZ_EMAIL + KIZ_PASSWORD + KIZ_COGNITO_CLIENT_ID to sign in via Cognito ' +
-      'USER_PASSWORD_AUTH at startup.'
+    'No authentication configured. Provide ONE of: ' +
+      'KIZ_REFRESH_TOKEN + KIZ_COGNITO_CLIENT_ID (recommended — run `kiz-login` first, no ' +
+      'password stored); OR KIZ_EMAIL + KIZ_PASSWORD + KIZ_COGNITO_CLIENT_ID; OR ' +
+      'KIZ_ID_TOKEN (quick test, expires in ~1h).'
   );
 }
 

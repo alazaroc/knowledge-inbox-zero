@@ -286,18 +286,19 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 /**
- * Language instruction for the extraction's `summary` field only. The user
- * asked for "What the content says" (the summary) to follow their chosen output
- * language too. topics/concepts stay English (taxonomy). With an explicit
- * language we force it; with 'auto' / no profile we add nothing — the extract
- * prompt has no profile text to match, so it keeps its default (English),
- * matching prior behaviour. Returns '' (no-op) or a leading-newline clause.
+ * Language instruction for the extraction's human-readable fields (`summary`
+ * AND `claims`) — the two fields the user reads as prose. The user asked for
+ * "What the content says" (summary) and its "Key claims" to follow their chosen
+ * output language. topics/concepts stay English (a stable, filterable
+ * taxonomy). With an explicit language we force it; with 'auto' / no profile we
+ * add nothing — the extract prompt has no profile text to match, so it keeps
+ * its default (the document's language). Returns '' (no-op) or a clause.
  */
 function summaryLanguageInstruction(profile?: Profile): string {
   const lang = profile?.outputLanguage ?? 'auto';
   if (lang === 'auto') return '';
   const name = LANGUAGE_NAMES[lang] ?? 'English';
-  return `\nWrite the "summary" field in ${name} (topics and concepts still in English). The rest of the JSON is unchanged.`;
+  return `\nWrite the "summary" and every "claims" entry in ${name} (topics and concepts still in English). The rest of the JSON is unchanged.`;
 }
 
 /**

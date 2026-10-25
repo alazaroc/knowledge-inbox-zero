@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ChevronRight,
   SlidersHorizontal,
+  RefreshCw,
 } from 'lucide-react';
 import type { Profile, ProfileInput } from '@app/shared';
 import { MAX_PROFILE_CONTEXT_CHARS } from '@app/shared';
@@ -188,6 +189,44 @@ export default function SettingsPage() {
   // leaving the page, without re-syncing — and copy it into the editable About.
   const [savedSnapshot, setSavedSnapshot] = useState('');
 
+  // #1: "Re-evaluate my whole library with this profile". The MKV of every
+  // document depends on the profile, so after editing it the old verdicts are
+  // stale. This used to live as a prominent button on the Library header, which
+  // was too visible and affected ALL documents with one tap — it belongs here,
+  // next to the profile it re-runs against. The daily quota is enforced
+  // server-side; we surface what it blocked.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState('');
+  const reanalyzeLibrary = async () => {
+    if (
+      !window.confirm(
+        'This re-evaluates your WHOLE library against your current profile. It re-runs the AI ' +
+          'analysis on every document and counts toward your daily limit. Continue?'
+      )
+    ) {
+      return;
+    }
+    setBulkBusy(true);
+    setBulkNotice('');
+    setError('');
+    try {
+      const res = await api.post<{ pending: number; total: number; blocked?: string[] }>(
+        '/documents/reanalyze-all',
+        { scope: 'all' }
+      );
+      const blocked = res.blocked?.length ?? 0;
+      setBulkNotice(
+        `Re-analyzing ${res.pending} document${res.pending === 1 ? '' : 's'} against your ` +
+          'profile…' +
+          (blocked > 0 ? ` ${blocked} were left for tomorrow (daily limit reached).` : '')
+      );
+    } catch (err) {
+      setError((err as Error).message || 'Failed to start the re-analysis.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     setError('');
@@ -352,7 +391,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Knowledge profile</h1>
           <p className="text-sm text-gray-500">
@@ -360,14 +399,34 @@ export default function SettingsPage() {
             attention.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowHelp(true)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-        >
-          <HelpCircle className="h-4 w-4" /> How does this work?
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {!notConfigured && (
+            <button
+              type="button"
+              onClick={() => void reanalyzeLibrary()}
+              disabled={bulkBusy}
+              title="Re-run the AI analysis on every document in your library against this profile. Useful after you edit the profile, since every recommendation depends on it."
+              className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${bulkBusy ? 'animate-spin' : ''}`} />
+              {bulkBusy ? 'Re-evaluating…' : 'Re-evaluate library'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="inline-flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <HelpCircle className="h-4 w-4" /> How does this work?
+          </button>
+        </div>
       </div>
+
+      {bulkNotice && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
+          {bulkNotice}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
@@ -707,16 +766,18 @@ export default function SettingsPage() {
           )}
 
           <form onSubmit={onSave} className="space-y-6">
-            {/* Language the AI writes its explanations in — a global profile
-                preference, shown in both modes. 'Auto' matches your profile's
-                own language so cards stop coming back in a mix of languages. */}
+            {/* Language for ALL AI-written content (explanation, summary and
+                key claims) — a global profile preference, shown in both modes.
+                'Auto' matches your profile's own language so cards stop coming
+                back in a mix of languages. */}
             <div className="space-y-1 rounded-lg border border-gray-200 bg-white p-4">
               <label htmlFor="outputLanguage" className="block text-sm font-semibold text-gray-800">
                 Language for AI recommendations
               </label>
               <p className="text-xs text-gray-500">
-                The language we write each recommendation’s explanation in. “Auto” follows your
-                profile’s own language.
+                The language we write each recommendation in — the explanation, the summary and the
+                key claims. “Auto” follows your profile’s own language. (Topics and concepts stay in
+                English so they work as filters.)
               </p>
               <select
                 id="outputLanguage"

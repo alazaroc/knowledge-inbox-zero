@@ -14,20 +14,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, ConfigError } from './config.js';
-import { resolveIdToken } from './auth.js';
+import { createTokenProvider } from './auth.js';
 import { KizApiClient } from './api.js';
 import { registerTools } from './tools.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  // Resolve the id token up front so misconfiguration fails fast and loudly,
-  // before any tool call. In password mode this mints it once at startup.
-  const idToken = await resolveIdToken(config);
+  // Resolve a token provider up front so misconfiguration fails fast and
+  // loudly, before any tool call. In password mode it mints the first token
+  // now and can renew on demand; in id-token mode it holds the supplied token.
+  const tokens = await createTokenProvider(config);
 
   const client = new KizApiClient({
     baseUrl: config.apiUrl,
-    getIdToken: () => idToken,
+    getIdToken: () => tokens.get(),
+    renewToken: () => tokens.renew(),
   });
 
   const server = new McpServer({

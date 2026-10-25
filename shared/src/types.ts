@@ -53,6 +53,16 @@ export interface Profile extends Timestamped {
   profileRepoUrl?: string; // optional PRIVATE repo raw URL (token lives in Secrets Manager)
   hasToken?: boolean; // true when a private-repo token is stored for this user (read-only flag)
   outputLanguage?: 'auto' | 'en' | 'es' | 'fr' | 'de' | 'pt' | 'it'; // AI explanation language
+  // Weekly email digest (opt-in). When enabled, a scheduled job emails this
+  // user their worth-reading documents on the chosen day + time slot.
+  digestEnabled?: boolean;
+  digestDay?: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday … 6 = Saturday (UTC day)
+  digestSlot?: 's0' | 's8' | 's16'; // fixed UTC send hour (00 / 08 / 16)
+  digestTimezone?: string; // IANA tz for DISPLAY only (e.g. 'Europe/Madrid'); send stays UTC
+  // Monthly email digest (opt-in, separate toggle). Sent on the LAST day of the
+  // month (UTC), reusing the same day-of-month=last + chosen slot/timezone. It
+  // lists ALL pending worth-reading items (history), not just the week's.
+  monthlyDigestEnabled?: boolean;
   notConfigured?: boolean; // true only for the synthetic empty profile (Req 1.4)
 }
 
@@ -106,6 +116,7 @@ export interface KnowledgeDocument extends Timestamped {
   s3ContentRef?: string; // set when raw content >300KB (Req 4.7)
   archived?: boolean; // user lifecycle: archived documents are hidden by default
   starred?: boolean; // user marked this to read / keep (★)
+  userLabels?: string[]; // user's own free-form labels for organizing (e.g. "AWS SAA-C03")
   userFeedback?: 'up' | 'down'; // user's thumbs up/down on the classification (signal only)
   readingMinutes?: number; // estimated reading time in minutes (from Extraction.wordCount)
 }

@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
+  Share2,
   Sparkles,
   Star,
+  Tag,
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  X,
 } from 'lucide-react';
 import type {
   KnowledgeDocument,
@@ -15,6 +18,7 @@ import type {
   RecommendationTag,
   Scores,
 } from '@app/shared';
+import { MAX_USER_LABELS_PER_DOC, MAX_USER_LABEL_LENGTH } from '@app/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -112,14 +116,22 @@ export default function DocumentDetailPage() {
   }, [documentId]);
 
   // Toggle archived state via PATCH; archiving does not change owner-wide counts.
+  // #5: when ARCHIVING (not un-archiving), close the document and go back to the
+  // library — the user is done with it. The library restores the scroll position
+  // they left from, so they land back where they were, not at the top.
   const handleToggleArchive = async () => {
     if (!documentId || !doc || lifecycleBusy) return;
+    const wasArchiving = !doc.archived;
     setLifecycleBusy(true);
     setError('');
     try {
       const updated = await api.patch<KnowledgeDocument>(`/documents/${documentId}`, {
         archived: !doc.archived,
       });
+      if (wasArchiving) {
+        navigate('/app/library');
+        return;
+      }
       setDoc(updated);
     } catch (err) {
       setError((err as Error).message || 'Failed to update the document.');
@@ -145,6 +157,19 @@ export default function DocumentDetailPage() {
     }
   };
 
+  // Save the user's own labels (free-form organizing). Replaces the whole set.
+  const handleSaveLabels = async (labels: string[]) => {
+    if (!documentId || !doc) return;
+    try {
+      const updated = await api.patch<KnowledgeDocument>(`/documents/${documentId}`, {
+        userLabels: labels,
+      });
+      setDoc(updated);
+    } catch (err) {
+      setError((err as Error).message || 'Failed to update labels.');
+    }
+  };
+
   // Hard delete with confirmation; the backend decrements owner-wide counts.
   const handleDelete = async () => {
     if (!documentId || lifecycleBusy) return;
@@ -160,6 +185,41 @@ export default function DocumentDetailPage() {
     } catch (err) {
       setError((err as Error).message || 'Failed to delete the document.');
       setLifecycleBusy(false);
+    }
+  };
+
+  // Share this recommendation. The library is private per user, so we do NOT
+  // share a link into the app — we share a self-contained text snippet (title,
+  // verdict, the "why", and the ORIGINAL article URL). Uses the native share
+  // sheet on mobile and falls back to copying the text to the clipboard.
+  const [shareNote, setShareNote] = useState('');
+  const handleShare = async () => {
+    if (!doc) return;
+    const verdict = doc.degraded ? "Couldn't analyze" : (doc.recommendationState ?? '');
+    const why =
+      !doc.explanationUnavailable && doc.explanation ? `\n\n${doc.explanation.trim()}` : '';
+    const link = doc.canonicalUrl || doc.rawUrl || '';
+    const text = `${title}${verdict ? ` — ${verdict}` : ''}${why}\n\n${link}`.trim();
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url: link || undefined });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setShareNote('Copied to clipboard');
+      setTimeout(() => setShareNote(''), 2500);
+    } catch {
+      // User cancelled the share sheet, or clipboard was blocked — stay silent
+      // for a cancel, show a hint if copying is what failed.
+      try {
+        await navigator.clipboard.writeText(text);
+        setShareNote('Copied to clipboard');
+        setTimeout(() => setShareNote(''), 2500);
+      } catch {
+        setShareNote('Could not share on this device');
+        setTimeout(() => setShareNote(''), 2500);
+      }
     }
   };
 
@@ -183,8 +243,37 @@ export default function DocumentDetailPage() {
 
   const title = doc?.metadata?.title?.trim() || doc?.canonicalUrl || doc?.rawUrl || 'Document';
 
+  // #7: mobile "swipe back" gesture. A horizontal swipe that starts near the
+  // LEFT edge and moves RIGHT is the universal "go back" gesture (iOS Safari and
+  // Android both use edge-swipe-right for back; swiping left means "forward").
+  // We implement that standard: a clear left→right swipe returns to the library,
+  // which restores the scroll position the user left from. Vertical scrolls and
+  // small drags are ignored so it never fights normal scrolling.
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchTracking = useRef(false);
+  const onPageTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartX.current = t.clientX;
+    touchStartY.current = t.clientY;
+    // Only arm the gesture when it begins near the left edge, like the native
+    // back-swipe, so a mid-screen horizontal drag never triggers it by accident.
+    touchTracking.current = t.clientX <= 48;
+  };
+  const onPageTouchEnd = (e: React.TouchEvent) => {
+    if (!touchTracking.current) return;
+    touchTracking.current = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    // Mostly-horizontal, rightward, and long enough to be deliberate.
+    if (dx > 90 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      navigate('/app/library');
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           to="/app/library"
@@ -208,6 +297,14 @@ export default function DocumentDetailPage() {
             >
               <Star className={`h-4 w-4 ${doc.starred ? 'fill-amber-500 text-amber-500' : ''}`} />{' '}
               To read
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              title="Share this recommendation"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Share2 className="h-4 w-4" /> Share
             </button>
             <button
               type="button"
@@ -253,10 +350,17 @@ export default function DocumentDetailPage() {
           Re-analyzing against your current profile — this takes a few seconds.
         </p>
       )}
+      {shareNote && (
+        <p className="rounded-md bg-gray-100 px-4 py-2 text-sm text-gray-700">{shareNote}</p>
+      )}
       {reanalyzeError && (
         <p className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
           Couldn&apos;t re-analyze: {reanalyzeError}
         </p>
+      )}
+
+      {doc && (
+        <LabelEditor labels={doc.userLabels ?? []} onSave={(l) => void handleSaveLabels(l)} />
       )}
 
       {loading ? (
@@ -336,6 +440,12 @@ export default function DocumentDetailPage() {
                     {doc.recommendationState}
                   </span>
                 )
+              )}
+              {/* #4: show the MKV score right next to the verdict badge, so the
+                  overall priority is visible as soon as you open a document —
+                  not only buried in the "Supporting scores" grid further down. */}
+              {!doc.degraded && typeof doc.scores?.mkv === 'number' && (
+                <HeaderMkvBadge value={doc.scores.mkv} />
               )}
               {doc.tags?.map((tag) => (
                 <span
@@ -490,6 +600,26 @@ export default function DocumentDetailPage() {
   );
 }
 
+// MKV (marginal knowledge value, 0-100) as a colored pill, shown next to the
+// recommendation verdict in the header. Green = high, amber = medium, gray = low.
+function HeaderMkvBadge({ value }: { value: number }) {
+  const tone =
+    value >= 67
+      ? 'bg-green-100 text-green-800 ring-green-200'
+      : value >= 34
+        ? 'bg-amber-100 text-amber-800 ring-amber-200'
+        : 'bg-gray-100 text-gray-600 ring-gray-200';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ring-1 ${tone}`}
+      title="Marginal knowledge value (0–100) — the overall priority of this document for you."
+    >
+      <span className="text-[0.65rem] font-bold uppercase tracking-wide opacity-70">MKV</span>
+      {value}
+    </span>
+  );
+}
+
 function TagList({ label, values }: { label: string; values: string[] }) {
   return (
     <div className="space-y-1">
@@ -526,5 +656,74 @@ function ScoreStat({
         {estimated && <span className="ml-0.5 align-top text-xs text-gray-400">*</span>}
       </dd>
     </div>
+  );
+}
+
+// Free-form user labels for a document: add with Enter, remove with ×. Saves
+// the whole set via PATCH on each change. Caps mirror the shared schema so the
+// UI never offers more than the backend accepts.
+function LabelEditor({ labels, onSave }: { labels: string[]; onSave: (labels: string[]) => void }) {
+  const [draft, setDraft] = useState('');
+
+  const add = () => {
+    const value = draft.trim();
+    if (!value) return;
+    if (value.length > MAX_USER_LABEL_LENGTH) return;
+    if (labels.includes(value)) {
+      setDraft('');
+      return;
+    }
+    if (labels.length >= MAX_USER_LABELS_PER_DOC) return;
+    onSave([...labels, value]);
+    setDraft('');
+  };
+
+  const remove = (label: string) => onSave(labels.filter((l) => l !== label));
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <Tag className="h-4 w-4 text-gray-500" />
+        <h2 className="text-sm font-semibold text-gray-800">Your labels</h2>
+        <span className="text-xs text-gray-400">
+          Organize what deserves your attention — filter by these in the library.
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {labels.map((label) => (
+          <span
+            key={label}
+            className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700"
+          >
+            {label}
+            <button
+              type="button"
+              onClick={() => remove(label)}
+              title={`Remove “${label}”`}
+              className="cursor-pointer text-indigo-400 hover:text-indigo-700"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {labels.length < MAX_USER_LABELS_PER_DOC && (
+          <input
+            type="text"
+            value={draft}
+            maxLength={MAX_USER_LABEL_LENGTH}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add();
+              }
+            }}
+            onBlur={add}
+            placeholder={labels.length ? 'Add label…' : 'e.g. AWS SAA-C03'}
+            className="min-w-[8rem] flex-1 rounded border border-gray-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+        )}
+      </div>
+    </section>
   );
 }

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Knowledge Inbox Zero — aggressively reduce your reading backlog. Serverless on AWS (React + Vite + CDK + Cognito + Bedrock).",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.22.1"
   },
   "workspaces": [
     "shared",
@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "lint-staged": "^15.5.2",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.8.3",
     "stylelint": "^17.9.0",
     "stylelint-config-standard": "^40.0.0",

@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { RECOMMENDATION_STATE, ROLES, MAX_PROFILE_CONTEXT_CHARS } from './constants.js';
+import {
+  RECOMMENDATION_STATE,
+  ROLES,
+  MAX_PROFILE_CONTEXT_CHARS,
+  MAX_USER_LABELS_PER_DOC,
+  MAX_USER_LABEL_LENGTH,
+} from './constants.js';
 
 // Profile list entries: trim, drop empties (Req 1.7), cap length/count (Req 1.8).
 const trimmedEntry = z.string().transform((s) => s.trim());
@@ -51,6 +57,23 @@ export const profileSchema = z.object({
   // Language the AI writes its recommendation explanations in. 'auto' matches
   // the language of the user's profile text; the rest force that language.
   outputLanguage: z.enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it']).default('auto'),
+  // Weekly email digest (opt-in). Day 0=Sunday..6=Saturday; slot is a coarse
+  // time band so the backend only runs a few fixed times per day.
+  digestEnabled: z.boolean().optional(),
+  digestDay: z.number().int().min(0).max(6).optional() as z.ZodType<
+    0 | 1 | 2 | 3 | 4 | 5 | 6 | undefined
+  >,
+  digestSlot: z.enum(['s0', 's8', 's16']).optional(),
+  // IANA timezone for DISPLAY only (the send time is a fixed UTC hour). Stored
+  // so the UI can show each user their own local send time.
+  digestTimezone: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s.length <= 64, { message: 'Timezone too long' })
+    .optional(),
+  // Monthly email digest (opt-in, separate from the weekly one). Sent on the
+  // last day of the month, reusing the same slot/timezone; lists ALL pending.
+  monthlyDigestEnabled: z.boolean().optional(),
 });
 
 // Profile import (draft generation): give EITHER a public URL to fetch OR raw
@@ -92,9 +115,25 @@ export const documentPatchSchema = z
     archived: z.boolean().optional(),
     starred: z.boolean().optional(),
     userFeedback: z.enum(['up', 'down']).nullable().optional(),
+    // Free-form user labels. Replaces the whole set; trimmed, de-duped,
+    // bounded. An empty array clears all labels.
+    userLabels: z
+      .array(z.string().transform((s) => s.trim()))
+      .transform((arr) => Array.from(new Set(arr.filter((s) => s.length > 0))))
+      .refine((arr) => arr.length <= MAX_USER_LABELS_PER_DOC, {
+        message: `At most ${MAX_USER_LABELS_PER_DOC} labels`,
+      })
+      .refine((arr) => arr.every((s) => s.length <= MAX_USER_LABEL_LENGTH), {
+        message: `Each label is at most ${MAX_USER_LABEL_LENGTH} characters`,
+      })
+      .optional(),
   })
   .refine(
-    (v) => v.archived !== undefined || v.starred !== undefined || v.userFeedback !== undefined,
+    (v) =>
+      v.archived !== undefined ||
+      v.starred !== undefined ||
+      v.userFeedback !== undefined ||
+      v.userLabels !== undefined,
     {
       message: 'Nothing to update',
     }

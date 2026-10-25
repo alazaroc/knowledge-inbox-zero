@@ -1,62 +1,34 @@
 # Architecture Principles
 
-## Product
-
-Knowledge Inbox Zero optimizes for attention saved, not content accumulated.
-
-It is not:
-
-- a bookmark manager
-- a read-it-later app
-- an RSS reader
-- a general knowledge base
-
-Every product decision should support:
-"What deserves this user's attention and why?"
+(Qué es el producto y su taxonomía → `product.md`. Aquí solo principios de arquitectura y los gotchas de Bedrock.)
 
 ## AWS Architecture
 
-- Serverless-first.
-- Prefer existing architecture from the repository.
-- Prefer Lambda, DynamoDB, S3, API Gateway, CloudFront and Bedrock.
-- Avoid infrastructure with meaningful idle cost.
-- Do not introduce RDS, ECS, EKS or OpenSearch without explicit justification.
-- Prefer asynchronous processing for multi-document imports.
-- Keep infrastructure reproducible through CDK.
+- Serverless-first; reutiliza la arquitectura existente del repo antes de añadir.
+- Lambda, DynamoDB, S3, API Gateway, CloudFront, Bedrock. Evita infra con coste en reposo.
+- NO introducir RDS, ECS, EKS, OpenSearch ni vector DB sin justificación explícita (son V1 out-of-scope, ver `conventions.md`).
+- Procesamiento asíncrono (SQS + worker) para imports multi-documento; nunca mantener abierta una request.
+- Infra reproducible solo vía CDK (config a mano por CLI la pisa el siguiente deploy).
 
 ## Engineering
 
-- TypeScript strict typing.
-- Zod at external boundaries.
-- Reuse existing repository patterns.
-- Keep npm run validate green.
-- Avoid unnecessary dependencies.
-- Build vertically rather than implementing all backend layers first.
+- TypeScript estricto. Zod en los límites externos.
+- Lógica determinista preferida; reutiliza patrones del repo. Construye vertical (slice completo), no todas las capas backend primero.
+- Mantén `make validate` verde.
 
 ## AI
 
-- Amazon Bedrock is the default AI platform.
-- AI outputs must use structured schemas.
-- Deterministic logic should be preferred where appropriate.
-- Recommendations must be explainable.
-- Do not rely solely on an opaque LLM score.
+- Bedrock es la única plataforma AI (sin abstracción multi-proveedor en V1).
+- Salidas AI con esquemas estructurados; recomendaciones explicables, nunca un score opaco solo.
+- Bedrock SOLO para extracción estructurada + explicación escrita (worker) y para draftear el perfil (`POST /profile/import|/sync`). Todo lo demás es determinista.
 
-## Bedrock in eu-south-2 (gotchas that caused real bugs)
+## Bedrock en eu-south-2 (gotchas que causaron bugs reales)
 
-- In **eu-south-2** Nova/Claude are **not** invokable on-demand directly: they
-  require an **inference profile** (`eu.amazon.*` / `eu.anthropic.*`). Verify with
-  `aws bedrock list-foundation-models` (inferenceTypesSupported) +
-  `list-inference-profiles` before fixing a `BEDROCK_MODEL_ID`.
-- An **EU inference profile routes inference to ANY of its regions** for load
-  balancing (e.g. `nova-2-lite` routes to eu-south-2, eu-south-1, eu-west-1,
-  eu-west-3, eu-central-1, eu-north-1). The invoking role's IAM policy **MUST**
-  include the `foundation-model` ARN of **all** those regions, or it fails with
-  intermittent `AccessDenied` depending on where it routes that day. **Fix:** use
-  a region wildcard scoped to the model —
-  `arn:aws:bedrock:eu-*::foundation-model/<foundationModelId>` (safe; the `::` is
-  owner-account-only). Diagnose with
-  `get-inference-profile --query models[].modelArn` to see the real regions.
-- A silently-degraded worker (fetch OK, extraction OK with admin creds, but the
-  Lambda degrades the same input) usually means the **Lambda execution role**,
-  not the code. Add structured logging at the failure points and persist the real
-  `failureReason` rather than diagnosing blind from outside.
+- La familia Nova en **eu-south-2 NO es invocable on-demand**: requiere un **inference profile**. El id on-demand (`amazon.nova-2-lite-v1:0`, sin prefijo) da `ValidationException`. Verifica con `list-foundation-models` (inferenceTypesSupported) + `list-inference-profiles`.
+- **Default REAL del repo = perfil GLOBAL** `global.amazon.nova-2-lite-v1:0` (`BEDROCK_MODEL_ID` en `api-stack.ts`, overridable por env). Se eligió el GLOBAL (`global.*`) sobre el EU (`eu.*`) para que AWS enrute a la región menos cargada de toda la partición y reduzca throttling.
+- **Un inference profile enruta a CUALQUIERA de sus regiones.** La policy IAM debe cubrir el `foundation-model` ARN de TODAS ellas o falla con `AccessDenied` intermitente según dónde enrute ese día. `api-stack.ts` ya lo resuelve por tipo de prefijo:
+  - `global.*` → wildcard de región `arn:aws:bedrock:*::foundation-model/<id>` + inference-profile `arn:aws:bedrock:*:<acct>:inference-profile/<id>`.
+  - `eu.*` → `arn:aws:bedrock:eu-*::foundation-model/<id>` (una lista hardcodeada omitió eu-south-1 → AccessDenied; por eso el wildcard `eu-*`).
+  - on-demand sin prefijo → ARN regional único (no funciona para Nova aquí).
+  - El `::` (namespace del owner) es seguro: no amplía cuentas. Diagnostica regiones reales con `get-inference-profile --query models[].modelArn`.
+- Worker "silenciosamente degradado" (fetch OK, extracción OK con creds admin, pero la Lambda degrada el mismo input) suele ser el **rol de ejecución de la Lambda**, no el código. Añade logging estructurado en los puntos de fallo y persiste el `failureReason` real.

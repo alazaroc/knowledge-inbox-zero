@@ -6,9 +6,16 @@ import {
   QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import {
+  SendMessageBatchCommand,
+  SendMessageCommand,
+  SQSClient,
+  type SendMessageBatchRequestEntry,
+} from '@aws-sdk/client-sqs';
+import {
+  DAILY_IMPORT_LIMIT_USER,
   RECOMMENDATION_STATE,
+  ROLES,
   TABLE_NAMES,
   documentPatchSchema,
   type Batch,
@@ -59,7 +66,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const documentId = event.pathParameters?.documentId;
     const isReanalyze =
       event.resource?.endsWith('/reanalyze') || event.path?.endsWith('/reanalyze');
+    const isReanalyzeAll =
+      event.resource?.endsWith('/reanalyze-all') || event.path?.endsWith('/reanalyze-all');
 
+    if (method === 'POST' && isReanalyzeAll) return reanalyzeMany(event);
     if (method === 'POST' && documentId && isReanalyze) return reanalyzeDocument(event);
     if (method === 'GET' && !documentId) return listDocuments(event);
     if (method === 'GET' && documentId) return getDocument(event);
@@ -260,6 +270,16 @@ async function patchDocument(event: APIGatewayProxyEvent): Promise<APIGatewayPro
       values[':feedback'] = parsed.data.userFeedback;
     }
   }
+  if (parsed.data.userLabels !== undefined) {
+    // Replace the whole set. An empty array clears labels (REMOVE keeps the
+    // item small instead of storing []).
+    if (parsed.data.userLabels.length === 0) {
+      removes.push('userLabels');
+    } else {
+      sets.push('userLabels = :labels');
+      values[':labels'] = parsed.data.userLabels;
+    }
+  }
 
   let updateExpression = `SET ${sets.join(', ')}`;
   if (removes.length > 0) updateExpression += ` REMOVE ${removes.join(', ')}`;
@@ -441,4 +461,206 @@ async function reanalyzeDocument(event: APIGatewayProxyEvent): Promise<APIGatewa
   }
 
   return created({ batchId, total: 1, pending: 1, rejected: [] });
+}
+
+// Sentinel prefixes that share the documents table but are not real documents.
+const USAGE_PREFIX = 'USAGE#';
+
+/** UTC calendar day — the daily-quota window, same as imports.ts. */
+function usageDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** New/reanalyzed documents this owner has enqueued today (0 when none). */
+async function readUsageToday(ownerId: string): Promise<number> {
+  const r = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAMES.DOCUMENTS,
+      Key: { documentId: `${USAGE_PREFIX}${ownerId}#${usageDay()}` },
+      ProjectionExpression: '#c',
+      ExpressionAttributeNames: { '#c': 'count' },
+    })
+  );
+  const count = (r.Item as { count?: number } | undefined)?.count;
+  return typeof count === 'number' ? count : 0;
+}
+
+/** Atomically add `n` to today's usage counter (ADD creates the item at 0). */
+async function incrementUsageToday(ownerId: string, n: number): Promise<void> {
+  if (n <= 0) return;
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAMES.DOCUMENTS,
+      Key: { documentId: `${USAGE_PREFIX}${ownerId}#${usageDay()}` },
+      UpdateExpression: 'ADD #c :n SET updatedAt = :ts',
+      ExpressionAttributeNames: { '#c': 'count' },
+      ExpressionAttributeValues: { ':n': n, ':ts': now() },
+    })
+  );
+}
+
+/**
+ * POST /documents/reanalyze-all — bulk re-queue the owner's documents for a
+ * fresh analysis against the CURRENT profile.
+ *
+ * Body `{ scope: 'failed' | 'all' }` (default 'failed'):
+ *   - 'failed': only documents that degraded (couldn't analyze) — the "retry
+ *     everything that failed" button.
+ *   - 'all': every terminal (completed/failed) document — "re-evaluate my whole
+ *     library" after editing the profile, since MKV depends on the profile.
+ *
+ * Re-analysis drives Bedrock cost, so it consumes the SAME daily quota as
+ * imports: a USER is capped at the remaining quota for today; the excess is NOT
+ * re-queued and is reported as `blocked` so the user can run it again tomorrow.
+ * ADMIN is unlimited. Documents still pending/processing are skipped (not
+ * double-queued). COUNTS is pre-decremented per doc exactly like the single
+ * reanalyze, so the worker's re-increment nets to zero.
+ */
+async function reanalyzeMany(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const auth = await authenticate(event);
+  if ('error' in auth) return auth.error;
+  const ownerId = auth.ctx.sub;
+
+  let scope: 'failed' | 'all' = 'failed';
+  try {
+    const body = JSON.parse(event.body ?? '{}') as { scope?: unknown };
+    if (body.scope === 'all' || body.scope === 'failed') scope = body.scope;
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
+  // Collect the owner's candidate documents across the byOwner GSI (paginated).
+  const candidates: KnowledgeDocument[] = [];
+  let startKey: Record<string, unknown> | undefined;
+  do {
+    const page = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAMES.DOCUMENTS,
+        IndexName: 'byOwner',
+        KeyConditionExpression: 'ownerId = :o',
+        ExpressionAttributeValues: { ':o': ownerId },
+        ExclusiveStartKey: startKey,
+      })
+    );
+    for (const item of (page.Items ?? []) as KnowledgeDocument[]) {
+      if (isCountsItem(item)) continue; // skip COUNTS/USAGE sentinels
+      // Only terminal docs are eligible; never double-queue in-flight ones.
+      if (item.status !== 'completed' && item.status !== 'failed') continue;
+      if (scope === 'failed' && !item.degraded) continue;
+      candidates.push(item);
+    }
+    startKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (startKey);
+
+  if (candidates.length === 0) {
+    return ok({ batchId: null, total: 0, pending: 0, blocked: [], rejected: [] });
+  }
+
+  // Daily quota (cost control): same cap as imports. ADMIN unlimited.
+  const isAdmin = auth.ctx.role === ROLES.ADMIN;
+  const usedToday = isAdmin ? 0 : await readUsageToday(ownerId);
+  const remaining = isAdmin ? null : Math.max(0, DAILY_IMPORT_LIMIT_USER - usedToday);
+
+  const toQueue = remaining === null ? candidates : candidates.slice(0, remaining);
+  const blocked =
+    remaining === null
+      ? []
+      : candidates.slice(remaining).map((d) => d.rawUrl ?? d.canonicalUrl ?? d.documentId);
+
+  if (toQueue.length === 0) {
+    return ok({
+      batchId: null,
+      total: candidates.length,
+      pending: 0,
+      blocked,
+      rejected: [],
+      dailyLimit: DAILY_IMPORT_LIMIT_USER,
+      remaining: 0,
+    });
+  }
+
+  const ts = now();
+  const batchId = newId();
+  const batch: Batch = {
+    batchId,
+    ownerId,
+    status: 'processing',
+    total: toQueue.length,
+    pending: toQueue.length,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+    rejected: [],
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE_NAMES.BATCHES, Item: batch }));
+
+  // Per-doc: pre-decrement COUNTS (what the worker will re-add), reset to
+  // pending and drop the stale stateKey. Same correctness as reanalyzeDocument.
+  await Promise.all(
+    toQueue.map(async (doc) => {
+      const priorState = doc.recommendationState;
+      const wasTerminal = doc.status === 'completed' || doc.status === 'failed';
+      const hadState =
+        Boolean(priorState) && (RECOMMENDATION_STATE as readonly string[]).includes(priorState!);
+      if (wasTerminal || hadState) {
+        const names: Record<string, string> = {};
+        const adds: string[] = [];
+        if (wasTerminal) {
+          names['#total'] = 'total';
+          adds.push('#total :neg1');
+        }
+        if (hadState) {
+          names['#state'] = priorState as string;
+          adds.push('#state :neg1');
+        }
+        await ddb.send(
+          new UpdateCommand({
+            TableName: TABLE_NAMES.DOCUMENTS,
+            Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
+            UpdateExpression: `ADD ${adds.join(', ')} SET updatedAt = :ts`,
+            ExpressionAttributeNames: names,
+            ExpressionAttributeValues: { ':neg1': -1, ':ts': ts },
+          })
+        );
+      }
+      await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAMES.DOCUMENTS,
+          Key: { documentId: doc.documentId },
+          UpdateExpression:
+            'SET #status = :pending, batchId = :batchId, updatedAt = :ts REMOVE stateKey',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':pending': 'pending', ':batchId': batchId, ':ts': ts },
+        })
+      );
+    })
+  );
+
+  // Enqueue one SQS message per document (batched in groups of 10).
+  const url = queueUrl();
+  if (url) {
+    for (let i = 0; i < toQueue.length; i += 10) {
+      const slice = toQueue.slice(i, i + 10);
+      const entries: SendMessageBatchRequestEntry[] = slice.map((d, idx) => ({
+        Id: String(idx),
+        MessageBody: JSON.stringify({ documentId: d.documentId, batchId, ownerId }),
+      }));
+      await sqs.send(new SendMessageBatchCommand({ QueueUrl: url, Entries: entries }));
+    }
+  }
+
+  // Consume quota for what we actually re-queued (ADMIN: no-op).
+  if (!isAdmin) await incrementUsageToday(ownerId, toQueue.length);
+
+  return created({
+    batchId,
+    total: candidates.length,
+    pending: toQueue.length,
+    blocked,
+    rejected: [],
+    dailyLimit: isAdmin ? null : DAILY_IMPORT_LIMIT_USER,
+    remaining: remaining === null ? null : Math.max(0, remaining - toQueue.length),
+  });
 }

@@ -14,19 +14,48 @@ classification locally; every tool call maps to one API endpoint.
 
 No URL, token, email, or password is ever hardcoded. The server reads:
 
-| Variable                | Required | Purpose                                                                |
-| ----------------------- | -------- | ---------------------------------------------------------------------- |
-| `KIZ_API_URL`           | yes      | Deployed API base URL (stack output `ApiUrl` / SSM `api-url`).         |
-| `KIZ_ID_TOKEN`          | one-of   | A Cognito **id token** (preferred; works with MFA).                    |
-| `KIZ_EMAIL`             | one-of   | With `KIZ_PASSWORD` + `KIZ_COGNITO_CLIENT_ID`, signs in at startup.    |
-| `KIZ_PASSWORD`          | one-of   | Password for `USER_PASSWORD_AUTH`.                                     |
-| `KIZ_COGNITO_CLIENT_ID` | one-of   | Cognito app client id for `USER_PASSWORD_AUTH`.                        |
-| `KIZ_COGNITO_REGION`    | no       | Cognito region (defaults to `eu-south-2`, falls back to `AWS_REGION`). |
+| Variable                | Required              | Purpose                                                                |
+| ----------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `KIZ_API_URL`           | yes                   | Deployed API base URL (stack output `ApiUrl` / SSM `api-url`).         |
+| `KIZ_REFRESH_TOKEN`     | one-of                | Cognito **refresh token** (recommended; mint with `kiz-login`).        |
+| `KIZ_COGNITO_CLIENT_ID` | with refresh/password | Cognito app client id the token was issued for.                        |
+| `KIZ_EMAIL`             | one-of                | With `KIZ_PASSWORD` + `KIZ_COGNITO_CLIENT_ID`, signs in at startup.    |
+| `KIZ_PASSWORD`          | one-of                | Password for `USER_PASSWORD_AUTH` (kept in env — avoid if shared).     |
+| `KIZ_ID_TOKEN`          | one-of                | A ready-made Cognito **id token** (quick tests / MFA; not renewable).  |
+| `KIZ_COGNITO_REGION`    | no                    | Cognito region (defaults to `eu-south-2`, falls back to `AWS_REGION`). |
 
-Provide **either** `KIZ_ID_TOKEN` **or** the `KIZ_EMAIL` + `KIZ_PASSWORD` +
-`KIZ_COGNITO_CLIENT_ID` trio. The server fails fast with a precise stderr
-message when configuration is missing or a Cognito challenge (password change,
-MFA) blocks `USER_PASSWORD_AUTH`.
+Pick ONE auth strategy, in order of preference:
+**refresh token** (no password on disk) → **email/password** → **id token**.
+
+### No password in your config — `kiz-login`
+
+A serious MCP integration never stores your password. Run `kiz-login` **once**:
+it signs you in interactively (the password is read without echo and never
+written anywhere), then prints a Cognito **refresh token** and a ready-to-paste
+`mcpServers` block. Put the refresh token in `KIZ_REFRESH_TOKEN`.
+
+```bash
+npm run build -w mcp-server
+KIZ_COGNITO_CLIENT_ID=<app-client-id> \
+KIZ_API_URL=https://<api-id>.execute-api.<region>.amazonaws.com \
+node mcp-server/dist/login.js
+```
+
+A refresh token lasts 30 days, is **revocable from Cognito**, and is **not your
+password** — exactly the OAuth-style flow GitHub/Slack/Google MCP servers use.
+
+### Token lifetime & automatic renewal
+
+Cognito id tokens are short-lived (this pool issues **1-hour** tokens). In
+**refresh-token** and **email/password** modes the server does not just mint one
+token at startup: when the API answers a tool call with `401` (token expired),
+it obtains a fresh id token — from the refresh token, or by re-running
+`USER_PASSWORD_AUTH` — and retries the call once, transparently. So a persistent
+MCP connection survives well past one hour with no restart. In **`KIZ_ID_TOKEN`
+mode** there is nothing to renew from, so once that token expires the server
+fails fast with an actionable message. The server fails fast at startup too when
+configuration is missing or a Cognito challenge (password change, MFA) blocks
+sign-in.
 
 ## Tools
 

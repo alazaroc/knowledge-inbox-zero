@@ -2,67 +2,49 @@
 
 ```
 .
-├── shared/             # @app/shared — types, constants, zod schemas, pure MKV logic (build first)
-│   └── src/            # constants.ts, index.ts, schemas.ts, types.ts
-├── frontend/           # React SPA (Vite + Tailwind + PWA + Amplify)
-│   └── src/
-│       ├── components/ # reusable UI (ProtectedRoute, ReloadPrompt, ui/)
-│       ├── context/    # AuthContext.tsx — session state
-│       ├── lib/        # amplify.ts (Cognito), api.ts (backend client with retry/backoff)
-│       ├── pages/
-│       │   ├── app/    # AppLayout, ProfilePage, AddContentPage, LibraryPage, DocumentDetailPage
-│       │   └── auth/   # LoginPage
-│       └── App.tsx     # routes (/login, /app → library/add/library/:documentId/profile)
-├── backend/            # Lambda handlers per domain
-│   └── src/
-│       ├── handlers/   # profile.ts, imports.ts, documents.ts, analysis-worker.ts, users.ts
-│       ├── lib/        # auth, dynamo, handler-utils, ids, response, zod-errors, bedrock, retrieve
-│       └── __tests__/  # *.test.ts (Jest) incl. property tests (fast-check)
-├── infra/cdk/          # CDK app
-│   ├── bin/app.ts      # entrypoint wiring the stacks
-│   └── lib/            # storage-stack, auth-stack, api-stack, frontend-stack, naming.ts
+├── shared/             # @app/shared — tipos, constantes, zod, lógica MKV pura (build primero)
+├── frontend/           # React SPA (Vite + Tailwind + PWA + Amplify/Cognito)
+│   └── src/{components,context,lib,pages/{app,auth}}  # api.ts con retry/backoff; AuthContext
+├── backend/            # Lambdas por dominio
+│   └── src/{handlers,lib,__tests__}
+├── infra/cdk/          # CDK: bin/app.ts + lib/{storage,auth,api,frontend}-stack.ts, naming.ts
+├── mcp-server/         # servidor MCP standalone (no es workspace de build; ver docs/mcp.md)
+├── browser-extension/  # extensión de navegador (empaquetada aparte)
 ├── scripts/            # deploy.sh, create-user.sh, set-password.sh, dev-frontend.sh
-├── .github/workflows/  # pipeline.yml (lint → test → build → deploy)
-├── Makefile            # unified command interface
-└── tsconfig.base.json  # shared TypeScript config
+└── Makefile            # interfaz única de comandos
 ```
 
-## Domains (one Lambda handler each)
+Convenciones de handlers backend → `conventions.md` (no duplicar aquí).
 
-- **`profile`** (`/profile`): CRUD for the single per-user `Profile`. Deterministic, except `POST /profile/import`, which makes one Bedrock call to draft a profile from pasted text/CV (nothing is persisted; the draft only prefills the form).
-- **`imports`** (`/imports`, `/imports/{batchId}`): create batches from pasted URLs, canonicalize + dedup, enqueue analysis to SQS, serve batch progress. Deterministic. Never calls Bedrock.
-- **`documents`** (`/documents`, `/documents/{documentId}`): the library (grouped + per-state counts + pagination) and document detail. Read-only. Deterministic. Never calls Bedrock.
-- **`analysis-worker`**: SQS-triggered (not an API route). The full per-document pipeline — fetch → readability extract → Bedrock structured extraction → deterministic MKV scoring → Bedrock explanation → persist → atomic counter updates. **The only component that writes to the content S3 bucket, and the only one that invokes Bedrock in the analysis pipeline** (the `profile` handler also calls Bedrock, but only to draft a profile — see above).
-- **`users`** (`/users`, `/users/me`, `/users/{username}`): Cognito user management (ADMIN-only except `/users/me`).
+## Dominios (un handler Lambda cada uno, salvo pre-signup que es trigger Cognito)
 
-## Where things go
+- **`profile`** (`/profile` GET/PUT, `/profile/import` POST, `/profile/sync` POST): CRUD del `Profile` único por usuario. Determinista EXCEPTO `import` (draftea perfil desde texto/CV pegado con una llamada Bedrock; no persiste, solo prellena) y `sync` (re-fetch LIVE del fichero fuente configurado y refresca el perfil). Lee/escribe el Secret `profile-tokens` (token privado por usuario para repos privados).
+- **`imports`** (`/imports`, `/imports/{batchId}`): crea batches desde URLs pegadas, canonicaliza+dedup, encola análisis a SQS, sirve progreso. Determinista. Nunca llama a Bedrock.
+- **`documents`** (`/documents` GET, `/documents/{id}` GET/PATCH/DELETE, `/documents/{id}/reanalyze` POST): library (agrupada + counts + paginación) y detalle. GET/PATCH/DELETE + reanalyze NO es read-only: reanalyze resetea el doc a pending, ajusta COUNTS, crea un batch de un doc y re-encola a SQS. No llama a Bedrock directamente (lo hace el worker).
+- **`analysis-worker`**: disparado por SQS (no es ruta API). Pipeline por doc: fetch → readability → extracción Bedrock → scoring MKV determinista → explicación Bedrock → persiste → counters atómicos. **Único que escribe en el bucket S3 de contenido**; invoca Bedrock (como `profile`).
+- **`users`** (`/users`, `/users/me`, `/users/{username}`): gestión Cognito. Todo requiere rol ADMIN salvo `/users/me`.
+- **`pre-signup`**: trigger Cognito. Auto-confirma la cuenta (`autoConfirmUser=true`) pero deja `email_verified=false` a propósito → la verificación es un banner no-bloqueante in-app, no un paso obligatorio. **Sign-up es público** (`selfSignUpEnabled: true`), no invite-only.
 
-- **Shared types/schemas/constants + pure logic** → `shared/src`. Anything used by both frontend and backend (entity types, zod schemas, table names) and all pure deterministic logic (URL canonicalization, dedup keys, concept-set math, MKV scoring, state mapping) lives here so it is property-tested once and reused by the API handlers and the worker.
-- **API logic** → `backend/src/handlers/<domain>.ts`. One handler file per domain, exporting a single `handler` that routes by HTTP method + path params.
-- **Reusable backend helpers** → `backend/src/lib/` — `auth`, `dynamo` (shared `ddb` doc client), `handler-utils` (authenticate/parseBody), `response` builders, `ids` (newId/now), `zod-errors`, `bedrock` (extraction + explanation), `retrieve` (fetch + Mozilla Readability). Do not inline these concerns in handlers.
-- **Infrastructure** → declare tables + the content bucket in `storage-stack.ts`; routes, Lambdas, SQS queue/DLQ, IAM grants, GSIs, and the Bedrock policy in `api-stack.ts`.
-- **Frontend pages** → `frontend/src/pages/`; call the backend through `lib/api.ts` and read session from `context/AuthContext.tsx`; register routes in `App.tsx`.
+## Dónde va cada cosa
 
-## Data model (DynamoDB, one table per entity, PAY_PER_REQUEST)
+- **Tipos/schemas/constantes + lógica pura** → `shared/src` (property-tested una vez, reusado por API y worker).
+- **Lógica API** → `backend/src/handlers/<dominio>.ts`.
+- **Helpers backend** → `backend/src/lib/`: `auth`, `dynamo` (doc client `ddb`), `handler-utils` (authenticate/parseBody), `response`, `ids` (newId/now), `zod-errors`, `bedrock`, `retrieve` (fetch + Readability). No inlinear en handlers.
+- **Infra**: tablas + bucket en `storage-stack.ts`; rutas, Lambdas, SQS queue/DLQ, Secret `profile-tokens`, IAM, GSIs y policy Bedrock en `api-stack.ts`; Cognito en `auth-stack.ts`.
+- **Páginas front** → `frontend/src/pages/`; backend vía `lib/api.ts`, sesión vía `context/AuthContext.tsx`, rutas en `App.tsx`.
 
-- **`profiles`** — one item per user. PK `userId` (Cognito `sub`). No SK, no GSI.
-- **`batches`** — one item per import batch. PK `batchId`. GSI `byOwner` (PK `ownerId`, SK `createdAt`) lists newest-first. Rejected lines stored on the item as a bounded array.
-- **`documents`** — one item per canonical URL per owner. PK `documentId` = `sha256(ownerId#canonicalUrl)` → re-import is an idempotent upsert. GSIs: `byOwner` (library page + cursor), `byOwnerState` (filter by recommendation state), `byBatch` (worker + progress lookups). Per-owner **counts aggregate** item (`documentId = "COUNTS#<ownerId>"`) updated with atomic `ADD` so library counts are O(1) and pagination-independent.
-- **`users`** — app user profiles (auth lives in Cognito). PK `userId`, GSI `byEmail`.
-- **Content S3 bucket** (`{project}-content-{env}`, private, SSE-S3, Block Public Access, RETAIN): offloaded extracted content when raw/readable content exceeds 300 KB. Object key `{ownerId}/{documentId}.txt`; the document row stores `s3ContentRef`.
+## Modelo de datos (DynamoDB, una tabla por entidad, PAY_PER_REQUEST, PITR, RETAIN)
 
-## Backend handler conventions
+4 tablas (`users, profiles, batches, documents`) + 1 Secret (`profile-tokens`) + bucket S3.
 
-- Wrap the handler body in `try/catch` and return `serverError(err)` on failure.
-- Route on `event.httpMethod` and path parameters.
-- Authenticate with `authenticate(event)` from `lib/handler-utils`; short-circuit on `'error' in auth`. `ctx.sub` is the owner id on every query.
-- Validate request bodies with `parseBody(event, <zodSchema>)` from `@app/shared`; short-circuit on `'error' in body`.
-- Build responses with `lib/response` (`ok`, `created`, `noContent`, `badRequest`, `notFound`, `serverError`).
-- Access DynamoDB through the shared `ddb` document client from `lib/dynamo`; reference table names via `TABLE_NAMES` from `@app/shared` — never hardcode.
-- Enforce per-user ownership (`ownerId` = Cognito `sub`) on every data access.
+- **`profiles`** — un item por usuario. PK `userId` (Cognito `sub`). Sin SK ni GSI.
+- **`batches`** — un item por batch. PK `batchId`. GSI `byOwner` (PK `ownerId`, SK `createdAt`, newest-first). Líneas rechazadas en array acotado dentro del item.
+- **`documents`** — un item por URL canónica por owner. PK `documentId` = `sha256(ownerId#canonicalUrl)` → re-import = upsert idempotente. GSIs: `byOwner` (library+cursor, SK `documentId`), `byOwnerState` (filtro por estado, SK `stateKey`), `byBatch` (worker+progreso). Item agregado de counts por owner (`documentId="COUNTS#<ownerId>"`) con `ADD` atómico → counts O(1) independientes de paginación.
+- **`users`** — perfil de app (auth vive en Cognito). PK `userId`, GSI `byEmail`.
+- **Bucket S3 contenido** (`{project}-content-{env}`, BLOCK_ALL, SSE-S3, RETAIN): offload de texto extraído cuando supera 300 KB. Key `{ownerId}/{documentId}.txt`; el doc guarda `s3ContentRef`.
 
 ## Naming
 
-- AWS resources: `{project}-{domain}-{env}` (e.g. Lambda `myapp-imports-test`, queue `myapp-analysis-test`, bucket `myapp-content-test`).
-- Internal packages use the fixed `@app/*` scope (`@app/shared`, `@app/frontend`, `@app/backend`, `@app/infra`).
-- ESM imports of local `.ts` files use `.js` extensions (e.g. `../lib/dynamo.js`).
+- Recursos AWS: `{project}-{domain}-{env}` (`naming.standard()`).
+- Paquetes internos: scope fijo `@app/*`.
+- Imports ESM de `.ts` locales usan extensión `.js` (`../lib/dynamo.js`).

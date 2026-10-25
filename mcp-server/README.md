@@ -37,9 +37,28 @@ is the MCP channel) and then speaks MCP.
 
 ## Configuration (environment only — no hardcoded URL/token/credentials)
 
-Provide `KIZ_API_URL` **plus** one auth strategy: either `KIZ_ID_TOKEN`
-(preferred, works with MFA), or `KIZ_EMAIL` + `KIZ_PASSWORD` +
-`KIZ_COGNITO_CLIENT_ID` (signs in via Cognito `USER_PASSWORD_AUTH` at startup).
+Provide `KIZ_API_URL` **plus** one auth strategy. In order of preference:
+
+- **Refresh token** (recommended — **no password on disk**): run `kiz-login`
+  once; it signs you in interactively (password read without echo, never
+  stored) and prints a Cognito **refresh token** to put in `KIZ_REFRESH_TOKEN`
+  (+ `KIZ_COGNITO_CLIENT_ID`). The server exchanges it for fresh id tokens and
+  renews them automatically. The refresh token lasts 30 days and is revocable
+  from Cognito — it is **not** your password. This is how OAuth-style MCP
+  servers (GitHub, Slack, Google) work.
+
+  ```bash
+  npm run build -w mcp-server
+  KIZ_COGNITO_CLIENT_ID=<app-client-id> \
+  KIZ_API_URL=https://<api-id>.execute-api.<region>.amazonaws.com \
+  node mcp-server/dist/login.js      # prints a ready-to-paste mcpServers block
+  ```
+
+- **Email + password** (`KIZ_EMAIL` + `KIZ_PASSWORD` + `KIZ_COGNITO_CLIENT_ID`):
+  convenient, also auto-renews, but keeps your password in the config/env —
+  avoid for anything shared.
+- **`KIZ_ID_TOKEN`** (quick tests / MFA accounts): a ready-made id token. It
+  **cannot be renewed**, so the server errors clearly once it expires (~1h).
 
 ## Full guide
 

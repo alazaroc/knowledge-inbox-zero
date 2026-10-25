@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -11,6 +11,7 @@ import {
   Star,
   SlidersHorizontal,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import type {
   KnowledgeDocument,
@@ -98,10 +99,23 @@ function sortByValue(docs: KnowledgeDocument[]): KnowledgeDocument[] {
   });
 }
 
-export default function LibraryPage() {
+export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | 'to-read' } = {}) {
   // Reading the session keeps the shared api client authenticated (Req 8.12);
   // the client itself attaches the token and handles retry/backoff.
   useAuth();
+  const toReadMode = mode === 'to-read';
+
+  // Optional ?batch=<id> filter: when the user arrives from the "See your
+  // library" button on the Add-content page, show ONLY the documents from that
+  // import batch instead of the whole mixed library. Client-side filter over
+  // the loaded documents (each doc carries its batchId) — no backend change.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const batchFilter = searchParams.get('batch');
+  const clearBatchFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('batch');
+    setSearchParams(next, { replace: true });
+  };
 
   const [filter, setFilter] = useState<Filter>('ALL');
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
@@ -121,7 +135,9 @@ export default function LibraryPage() {
   // Optional topic filter: show only docs whose extraction topics include this.
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   // Show only starred ("to read / keep") documents.
-  const [starredOnly, setStarredOnly] = useState(false);
+  const [starredOnly, setStarredOnly] = useState(toReadMode);
+  // Optional user-label filter (the user's own organizing labels).
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
   // #1: secondary filters (signals/site/topic/starred) are hidden behind a
   // "Filters" button so the article list is what fills the first screen.
   const [showFilters, setShowFilters] = useState(false);
@@ -150,6 +166,29 @@ export default function LibraryPage() {
     // Re-fetch whenever the active filter changes.
     void load(filter);
   }, [filter]);
+
+  // #5 / #6: restore the scroll position the user left from when they return
+  // from a document. We save window.scrollY into sessionStorage on the way out
+  // (see onRowClick) and restore it once the list has finished loading, so the
+  // user lands back where they were instead of at the top.
+  const SCROLL_KEY = 'library:scrollY';
+  useEffect(() => {
+    if (loading) return;
+    const saved = sessionStorage.getItem(SCROLL_KEY);
+    if (saved === null) return;
+    const y = Number(saved);
+    sessionStorage.removeItem(SCROLL_KEY);
+    if (!Number.isFinite(y) || y <= 0) return;
+    // Restore after paint so the list height exists to scroll within.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    });
+  }, [loading]);
+
+  // Remember where we are before opening a document, so returning restores it.
+  const rememberScroll = () => {
+    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+  };
 
   const loadMore = async () => {
     if (!nextCursor) return;
@@ -232,6 +271,47 @@ export default function LibraryPage() {
     }
   };
 
+  // Bulk re-analysis against the CURRENT profile. `scope: 'all'` re-evaluates
+  // the whole library (MKV depends on the profile, so after editing it the old
+  // verdicts are stale); `scope: 'failed'` retries only the degraded ones.
+  // The daily quota is enforced server-side; we surface what it blocked.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState('');
+  const reanalyzeMany = async (scope: 'all' | 'failed') => {
+    const count =
+      scope === 'failed' ? documents.filter((d) => d.degraded).length : (counts?.total ?? 0);
+    const label = scope === 'failed' ? 'retry all failed links' : 're-evaluate your whole library';
+    if (
+      !window.confirm(
+        `This will ${label} (${count} document${count === 1 ? '' : 's'}) against your current ` +
+          'profile. It re-runs the AI analysis and counts toward your daily limit. Continue?'
+      )
+    ) {
+      return;
+    }
+    setBulkBusy(true);
+    setBulkNotice('');
+    setError('');
+    try {
+      const res = await api.post<{ pending: number; total: number; blocked?: string[] }>(
+        '/documents/reanalyze-all',
+        { scope }
+      );
+      const blocked = res.blocked?.length ?? 0;
+      setBulkNotice(
+        `Re-analyzing ${res.pending} document${res.pending === 1 ? '' : 's'}…` +
+          (blocked > 0 ? ` ${blocked} were left for tomorrow (daily limit reached).` : '')
+      );
+      // Give the worker a moment, then refresh so states/scores update.
+      await new Promise((r) => setTimeout(r, 4000));
+      await load(filter);
+    } catch (err) {
+      setError((err as Error).message || 'Failed to start the re-analysis.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   // Hard delete, with confirmation. The backend decrements the owner-wide
   // counts authoritatively; rather than guess the per-state decrement locally
   // (which drifts when the doc has no clean state), we re-read the library so
@@ -258,13 +338,16 @@ export default function LibraryPage() {
   // Visible list: sorted by MKV desc, archived hidden unless toggled, and the
   // FAILED tab shows only degraded docs (which carry no real state).
   const visibleDocs = useMemo(() => {
+    // Batch filter (from ?batch=): narrow to a single import batch first, so
+    // every other filter and the free-text search apply within that batch.
+    let filtered = batchFilter ? documents.filter((d) => d.batchId === batchFilter) : documents;
     // Archived visibility: active-only, archived-only, or all.
-    let filtered =
+    filtered =
       archivedView === 'active'
-        ? documents.filter((d) => !d.archived)
+        ? filtered.filter((d) => !d.archived)
         : archivedView === 'archived'
-          ? documents.filter((d) => d.archived)
-          : documents;
+          ? filtered.filter((d) => d.archived)
+          : filtered;
     if (filter === 'FAILED') {
       filtered = filtered.filter((d) => d.degraded);
     } else if (filter !== 'ALL') {
@@ -288,6 +371,10 @@ export default function LibraryPage() {
       filtered = filtered.filter((d) => d.starred);
     }
     // Free-text search over title, domain and URL (case-insensitive).
+    // Optional user-label filter (the user's own organizing labels).
+    if (labelFilter) {
+      filtered = filtered.filter((d) => d.userLabels?.includes(labelFilter));
+    }
     const q = search.trim().toLowerCase();
     if (q) {
       filtered = filtered.filter((d) => {
@@ -296,6 +383,7 @@ export default function LibraryPage() {
           d.metadata?.sourceDomain ?? '',
           d.canonicalUrl ?? '',
           d.rawUrl ?? '',
+          ...(d.userLabels ?? []),
         ]
           .join(' ')
           .toLowerCase();
@@ -303,13 +391,25 @@ export default function LibraryPage() {
       });
     }
     return sortByValue(filtered);
-  }, [documents, archivedView, filter, search, siteFilter, topicFilter, starredOnly, tagFilter]);
+  }, [
+    documents,
+    archivedView,
+    filter,
+    search,
+    siteFilter,
+    topicFilter,
+    starredOnly,
+    tagFilter,
+    labelFilter,
+    batchFilter,
+  ]);
 
   // How many secondary filters are currently applied — shown on the "Filters"
   // button so the user knows a filter is hiding results even when the panel is
-  // closed.
+  // closed. ("To read" is a first-class chip outside the panel, so it is not
+  // counted here.)
   const activeFilterCount =
-    (tagFilter ? 1 : 0) + (siteFilter ? 1 : 0) + (topicFilter ? 1 : 0) + (starredOnly ? 1 : 0);
+    (tagFilter ? 1 : 0) + (siteFilter ? 1 : 0) + (topicFilter ? 1 : 0) + (labelFilter ? 1 : 0);
 
   // Topics actually present across the loaded docs, with counts, most frequent
   // first. Powers the "filter by topic" selector (article subjects, not the
@@ -325,7 +425,18 @@ export default function LibraryPage() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [documents]);
 
-  // Tags actually present across the loaded docs, for the tag-filter chips.
+  // The user's own labels present across the loaded docs, with counts, most
+  // frequent first. Powers the "filter by label" selector.
+  const presentLabels = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of documents) {
+      for (const l of d.userLabels ?? []) {
+        const label = l.trim();
+        if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [documents]);
   // Signals (recommendation tags) actually present across the loaded docs.
   // Powers the "Signals" filter chips — a dimension distinct from the state.
   const presentTags = useMemo(() => {
@@ -350,6 +461,10 @@ export default function LibraryPage() {
 
   const archivedCount = useMemo(() => documents.filter((d) => d.archived).length, [documents]);
 
+  // #3: how many documents are marked "to read" — drives the count on the
+  // first-class "To read" quick filter.
+  const starredCount = useMemo(() => documents.filter((d) => d.starred).length, [documents]);
+
   // Attention saved: documents the app judged do NOT deserve attention. SKIP is
   // the core signal; SKIM is partial. Surfaced as the primary success metric
   // rather than total stored (Req 8.10).
@@ -359,10 +474,18 @@ export default function LibraryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Library</h1>
-        <p className="text-sm text-gray-500">Your analyzed documents, most valuable first.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Library</h1>
+          <p className="text-sm text-gray-500">Your analyzed documents, most valuable first.</p>
+        </div>
       </div>
+
+      {bulkNotice && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
+          {bulkNotice}
+        </div>
+      )}
 
       {loading ? (
         // Req 8.7: loading indicator. Skeleton rows that keep the page layout
@@ -414,6 +537,25 @@ export default function LibraryPage() {
             </span>
           </div>
 
+          {/* Batch filter banner: when arriving from "See your library" after an
+              import, make it obvious we're showing only that batch, with a one-
+              click way back to the full library. */}
+          {batchFilter && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+              <p className="text-sm text-indigo-900">
+                Showing only the links from your latest import
+                <span className="font-medium"> ({visibleDocs.length})</span>.
+              </p>
+              <button
+                type="button"
+                onClick={clearBatchFilter}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"
+              >
+                <X className="h-3.5 w-3.5" /> Show all
+              </button>
+            </div>
+          )}
+
           {/* Primary filters — a single coherent group. Row 1: the recommendation
               STATE (what the app thinks of each doc). Row 2: the lifecycle VIEW
               (active / archived) on the left and the "more filters" toggle on
@@ -450,7 +592,7 @@ export default function LibraryPage() {
               })}
             </div>
 
-            {/* Row 2 — lifecycle view + more filters, same level. */}
+            {/* Row 2 — lifecycle view + to-read + more filters, same level. */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Active / Archived / All, now a labelled segmented control that
                   reads as a peer of the state chips above. */}
@@ -472,7 +614,24 @@ export default function LibraryPage() {
                 ))}
               </div>
 
-              {/* "More filters" (signals / site / topic / starred) on the right. */}
+              {/* #3: "To read" is a FIRST-CLASS quick filter, not buried under
+                  "More filters" — it is the one lifecycle action a user takes
+                  inside a document and then wants to find again in the list. */}
+              <button
+                type="button"
+                onClick={() => setStarredOnly((v) => !v)}
+                aria-pressed={starredOnly}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                  starredOnly
+                    ? 'bg-amber-500 text-white ring-amber-500'
+                    : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <Star className={`h-3.5 w-3.5 ${starredOnly ? 'fill-current' : ''}`} />
+                To read{starredCount > 0 ? ` (${starredCount})` : ''}
+              </button>
+
+              {/* "More filters" (signals / site / topic) on the right. */}
               <button
                 type="button"
                 onClick={() => setShowFilters((v) => !v)}
@@ -599,22 +758,56 @@ export default function LibraryPage() {
                 </div>
               )}
 
-              {/* "To read / keep" — show only starred documents. */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStarredOnly((v) => !v)}
-                  aria-pressed={starredOnly}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                    starredOnly
-                      ? 'bg-amber-500 text-white ring-amber-500'
-                      : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <Star className={`h-3.5 w-3.5 ${starredOnly ? 'fill-current' : ''}`} />
-                  To read / starred
-                </button>
-              </div>
+              {/* Filter by the user's own labels (free-form organizing). Only
+                  shown once the user has created at least one. */}
+              {presentLabels.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    Label
+                  </span>
+                  <select
+                    value={labelFilter ?? ''}
+                    onChange={(e) => setLabelFilter(e.target.value || null)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="">All labels ({presentLabels.length})</option>
+                    {presentLabels.map(([label, count]) => (
+                      <option key={label} value={label}>
+                        {label} ({count})
+                      </option>
+                    ))}
+                  </select>
+                  {labelFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setLabelFilter(null)}
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Retry-all banner — only on the "Couldn't analyze" tab, when there
+              is something to retry. One click re-queues every failed link. */}
+          {filter === 'FAILED' && failedCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5">
+              <p className="text-sm text-rose-800">
+                {failedCount} link{failedCount === 1 ? '' : 's'} couldn&apos;t be analyzed. You can
+                retry them all at once.
+              </p>
+              <button
+                type="button"
+                onClick={() => void reanalyzeMany('failed')}
+                disabled={bulkBusy}
+                className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${bulkBusy ? 'animate-spin' : ''}`} />
+                {bulkBusy ? 'Retrying…' : 'Retry all failed'}
+              </button>
             </div>
           )}
 
@@ -649,6 +842,7 @@ export default function LibraryPage() {
                   <DocumentRow
                     doc={doc}
                     busy={busyId === doc.documentId}
+                    onOpen={rememberScroll}
                     onToggleStar={() => void toggleStar(doc)}
                     onToggleArchive={() => void toggleArchive(doc)}
                     onReanalyze={() => void reanalyzeDoc(doc)}
@@ -705,6 +899,7 @@ function LibrarySkeleton() {
 function DocumentRow({
   doc,
   busy,
+  onOpen,
   onToggleStar,
   onToggleArchive,
   onReanalyze,
@@ -712,6 +907,7 @@ function DocumentRow({
 }: {
   doc: KnowledgeDocument;
   busy: boolean;
+  onOpen: () => void;
   onToggleStar: () => void;
   onToggleArchive: () => void;
   onReanalyze: () => void;
@@ -837,6 +1033,7 @@ function DocumentRow({
 
       <Link
         to={`/app/library/${doc.documentId}`}
+        onClick={onOpen}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -883,6 +1080,13 @@ function DocumentRow({
                 className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide sm:px-2.5 sm:py-1 sm:text-xs ${STATE_STYLES[state].badge}`}
               >
                 {RECOMMENDATION_LABEL[state]}
+              </span>
+            )}
+            {/* #3: surface the "to read" mark in the list itself, so a star set
+                inside a document is visible when scanning the library. */}
+            {doc.starred && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-amber-700 sm:px-2.5 sm:py-1 sm:text-xs">
+                <Star className="h-3 w-3 fill-current" /> To read
               </span>
             )}
             {failed && (
@@ -932,10 +1136,19 @@ function DocumentRow({
               type="button"
               onClick={stop(onReanalyze)}
               disabled={busy}
-              title="Re-analyze this document against your current profile"
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50"
+              title={
+                failed
+                  ? 'Retry: fetch and analyze this link again against your current profile'
+                  : 'Re-analyze this document against your current profile'
+              }
+              className={
+                failed
+                  ? 'inline-flex items-center gap-1 rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50'
+                  : 'inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50'
+              }
             >
-              <RefreshCw className="h-3.5 w-3.5" /> Re-analyze
+              <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />{' '}
+              {failed ? 'Retry' : 'Re-analyze'}
             </button>
             <button
               type="button"

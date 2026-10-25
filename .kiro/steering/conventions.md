@@ -1,33 +1,27 @@
 # Conventions & Cost Guardrails
 
-Hard-won conventions for Knowledge Inbox Zero. Follow these so new work stays aligned with the existing foundation (NFR-4) and the serverless/cost posture (NFR-1). Keep every vertical slice `npm run build` and `npm run validate` green.
+Convenciones ganadas con dolor. Mantén cada slice con `make build` + `make validate` verdes.
 
-## Backend handlers
+## Backend handlers (patrón obligatorio, un fichero por dominio)
 
-- One handler per domain in `backend/src/handlers/<domain>.ts`, exporting a single `handler`.
-- Dispatch inside the handler on `event.httpMethod` + path parameters. Do not split a domain across multiple Lambdas.
-- Authenticate with `authenticate(event)` from `lib/handler-utils`; short-circuit on `'error' in auth`. Use `ctx.sub` as the owner id. V1 has no cross-user sharing — authorization is plain per-user ownership (owner-only reads and writes).
-- Validate request bodies with `parseBody(event, <zodSchema>)`; short-circuit on `'error' in body`.
-- Build responses only with `lib/response` helpers: `ok`, `created`, `noContent`, `badRequest`, `notFound`, `serverError`. Wrap the body in `try/catch` and return `serverError(err)` on failure.
-- Access DynamoDB through the shared `ddb` document client from `lib/dynamo`. Reference table names via `TABLE_NAMES` from `@app/shared` — never hardcode.
-- Generate ids/timestamps with `newId()` / `now()` from `lib/ids`.
-- Enforce per-user ownership (`ownerId`) on every data access.
+- Un handler por dominio en `backend/src/handlers/<dominio>.ts`, exportando un único `handler`. NO partir un dominio en varias Lambdas. El dispatch es interno por `event.httpMethod` + path params.
+- `authenticate(event)` de `lib/handler-utils`; corta con `'error' in auth`. `ctx.sub` = owner id. V1 sin sharing: autorización = ownership por usuario (solo el owner lee/escribe lo suyo).
+- Cuerpos con `parseBody(event, <zodSchema>)`; corta con `'error' in body`.
+- Respuestas SOLO con `lib/response` (`ok`, `created`, `noContent`, `badRequest`, `notFound`, `forbidden`, `serverError`). Cuerpo en `try/catch` → `serverError(err)`.
+- DynamoDB vía el `ddb` compartido de `lib/dynamo`. Nombres de tabla vía `TABLE_NAMES` de `@app/shared` — nunca hardcodear. Ids/timestamps con `newId()`/`now()` de `lib/ids`.
+- Ownership (`ownerId` = Cognito `sub`) en CADA acceso a datos.
 
-## Runtime & modules
+## Runtime & módulos
 
-- Node 22, ARM64, ESM (`"type": "module"`).
-- Local `.ts` imports use `.js` extensions (e.g. `../lib/dynamo.js`).
-- AWS SDK v3; Zod at external boundaries.
+- Node 22, ARM64, ESM. Imports `.ts` locales usan extensión `.js` (`../lib/dynamo.js`). AWS SDK v3; Zod en límites externos.
 
-## Placement
+## Placement (invariante clave)
 
-- Shared types, constants, and Zod schemas live in `@app/shared` (built before backend/frontend).
-- Pure deterministic logic (canonicalization, dedup keys, MKV scoring) lives in `@app/shared` so it is property-tested once and reused by both the API and the async worker.
+- Lógica determinista pura (canonicalización, dedup, MKV scoring, state mapping) vive en `@app/shared` → property-tested una vez, reusada por API y worker. No duplicar en handlers.
 
-## Cost guardrails (deterministic-first)
+## Cost guardrails (deterministic-first) — V1
 
-- Invoke Amazon Bedrock ONLY for structured extraction and the written explanation. Everything else — canonicalization, dedup, metadata, MKV scoring — is deterministic. Prefer the deterministic path whenever it avoids an LLM call without losing required output.
-- No always-on infrastructure and no meaningful idle cost: no ECS/EKS, RDS, or OpenSearch Serverless in V1.
-- No vector DB / embeddings store in V1. Embeddings are a Tier B capability behind the `EMBEDDINGS_ENABLED` flag (defaults off); the deterministic concept-based path is the default.
-- Prefer PAY_PER_REQUEST DynamoDB, ARM64 Lambda, and SQS for asynchronous multi-document work. Sized for tens-to-hundreds of documents per user, not millions.
-- Bedrock is the single AI platform; no multi-provider abstraction in V1. AI outputs use structured schemas; recommendations must be explainable, never an opaque score alone.
+- Bedrock SOLO para extracción estructurada + explicación escrita (+ draft de perfil). Todo lo demás determinista; prefiere el camino determinista si evita una llamada LLM sin perder output.
+- Sin infra always-on ni coste en reposo: nada de ECS/EKS, RDS, OpenSearch Serverless en V1.
+- Sin vector DB / embeddings en V1: es Tier B tras el flag `EMBEDDINGS_ENABLED` (default off); el camino por conceptos deterministas es el default.
+- DynamoDB PAY_PER_REQUEST, Lambda ARM64, SQS para trabajo multi-doc async. Dimensionado para decenas-cientos de docs por usuario, no millones.

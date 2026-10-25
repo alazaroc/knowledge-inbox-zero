@@ -4,6 +4,8 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as eventsources from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -256,6 +258,7 @@ export class ApiStack extends cdk.Stack {
     analysisQueue.grantSendMessages(documentsFn);
     grantQueryIndexes(documentsFn, tableNames.documents); // GSIs byOwner + byOwnerState
     route([M.GET], '/documents', documentsFn);
+    route([M.POST], '/documents/reanalyze-all', documentsFn);
     route([M.GET, M.PATCH, M.DELETE], '/documents/{documentId}', documentsFn);
     route([M.POST], '/documents/{documentId}/reanalyze', documentsFn);
 
@@ -322,6 +325,69 @@ export class ApiStack extends cdk.Stack {
     route([M.GET, M.POST], '/users', usersFn);
     route([M.GET], '/users/me', usersFn);
     route([M.PUT, M.DELETE], '/users/{username}', usersFn);
+
+    // ── Weekly email digest (EventBridge-scheduled, NOT an API route) ─────────
+    // SES config: sender + region + app URL. Prod defaults wired here (per the
+    // repo rule: custom config lives in IaC, not CLI, so a redeploy can't lose
+    // it); overridable by env for forks. SES is in eu-west-1 (account is out of
+    // the sandbox there and playingaws.com is a verified domain); it can differ
+    // from this stack's region.
+    const digestFrom = process.env.DIGEST_FROM ?? 'Knowledge Inbox Zero <no-reply@playingaws.com>';
+    const digestSesRegion = process.env.DIGEST_SES_REGION ?? 'eu-west-1';
+    const digestAppUrl = process.env.DIGEST_APP_URL ?? 'https://inbox.playingaws.com';
+
+    const digestFn = new NodejsFunction(this, 'DigestFn', {
+      functionName: naming.standard('digest'),
+      entry: path.join(__dirname, '../../../backend/src/handlers', 'digest.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      tracing: lambda.Tracing.ACTIVE,
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true },
+      // Scanning profiles + per-user queries + SES sends can take a while for
+      // many recipients; give it room but keep it bounded.
+      timeout: cdk.Duration.seconds(120),
+      memorySize: 512,
+      environment: {
+        ...commonEnv,
+        DIGEST_FROM: digestFrom,
+        DIGEST_SES_REGION: digestSesRegion,
+        DIGEST_APP_URL: digestAppUrl,
+      },
+    });
+    tables.profiles.grantReadData(digestFn);
+    tables.documents.grantReadData(digestFn);
+    grantQueryIndexes(digestFn, tableNames.documents); // byOwnerState GSI
+    // Resolve each user's email from Cognito by sub.
+    digestFn.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ['cognito-idp:ListUsers'], resources: [userPoolArn] })
+    );
+    // Send via SES in the configured region. Scoped to the verified identity's
+    // ARN rather than '*'. The identity ARN is built for the SES region.
+    digestFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ses:SendEmail'],
+        resources: [`arn:aws:ses:${digestSesRegion}:${this.account}:identity/*`],
+      })
+    );
+
+    // One rule per slot, each at its FIXED UTC hour (00 / 08 / 16). The handler
+    // selects the users whose (digestDay, digestSlot) matches — so exactly 3
+    // runs a day regardless of users or timezones. A user's timezone only
+    // affects how these fixed slots are DISPLAYED, never when they fire. Hours
+    // MUST match DIGEST_SLOT_HOUR in shared/src/constants.ts.
+    const slotHours: Record<string, number> = { s0: 0, s8: 8, s16: 16 };
+    for (const [slot, hour] of Object.entries(slotHours)) {
+      new events.Rule(this, `DigestRule-${slot}`, {
+        ruleName: naming.standard(`digest-${slot}`),
+        schedule: events.Schedule.cron({ minute: '0', hour: String(hour) }),
+        targets: [
+          new eventsTargets.LambdaFunction(digestFn, {
+            event: events.RuleTargetInput.fromObject({ slot }),
+          }),
+        ],
+      });
+    }
 
     new ssm.StringParameter(this, 'ApiUrlParam', {
       parameterName: naming.ssm('api-url'),

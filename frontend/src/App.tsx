@@ -9,8 +9,10 @@ import SignUpPage from './pages/auth/SignUpPage';
 import LandingPage from './pages/LandingPage';
 import ProfilePage from './pages/app/ProfilePage';
 import SettingsPage from './pages/app/SettingsPage';
+import NotificationsPage from './pages/app/NotificationsPage';
 import AddContentPage from './pages/app/AddContentPage';
 import LibraryPage from './pages/app/LibraryPage';
+import ToReadPage from './pages/app/ToReadPage';
 import DocumentDetailPage from './pages/app/DocumentDetailPage';
 
 configureAmplify();
@@ -36,8 +38,10 @@ export default function App() {
             <Route index element={<LibraryPage />} />
             <Route path="add" element={<AddContentPage />} />
             <Route path="library" element={<LibraryPage />} />
+            <Route path="to-read" element={<ToReadPage />} />
             <Route path="library/:documentId" element={<DocumentDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

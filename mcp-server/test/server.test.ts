@@ -179,6 +179,82 @@ test('a non-2xx API response throws an ApiError carrying the status', async () =
   );
 });
 
+// ── 3b. Token auto-renewal on 401 ────────────────────────────────────────────
+
+// A fetch stub that returns 401 for the first N calls, then the success body.
+function stubFetchExpiring(
+  failures: number,
+  jsonBody: unknown
+): { fetch: FetchLike; calls: Array<{ url: string; init?: RequestInit }> } {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+    const n = calls.length;
+    calls.push({ url: String(url), init });
+    const expired = n < failures;
+    return {
+      ok: !expired,
+      status: expired ? 401 : 200,
+      text: async () => (expired ? 'token expired' : JSON.stringify(jsonBody)),
+    } as Response;
+  }) as unknown as FetchLike;
+  return { fetch: fetchImpl, calls };
+}
+
+test('a 401 triggers one token renewal and a retry (password mode)', async () => {
+  const { fetch, calls } = stubFetchExpiring(1, {
+    documentId: 'd1',
+    rawUrl: 'https://a.test',
+    canonicalUrl: 'https://a.test/',
+    status: 'completed',
+    recommendationState: 'READ',
+  });
+  let renewed = 0;
+  let token = 'stale-token';
+  const client = new KizApiClient({
+    baseUrl: 'https://example.test',
+    getIdToken: () => token,
+    renewToken: async () => {
+      renewed += 1;
+      token = 'fresh-token';
+      return { renewed: true, renewable: true };
+    },
+    fetchImpl: fetch,
+  });
+
+  const res = await handleExplainDocument(client, { documentId: 'd1' });
+  assert.equal(renewed, 1, 'should renew exactly once');
+  assert.equal(calls.length, 2, 'should retry once after renewing');
+  // The retry carried the FRESH token, not the stale one.
+  const retryHeaders = calls[1].init?.headers as Record<string, string>;
+  assert.equal(retryHeaders.Authorization, 'Bearer fresh-token');
+  assert.equal(JSON.parse(res.content[0].text).documentId, 'd1');
+});
+
+test('a 401 that cannot be renewed (id-token mode) does NOT retry and errors clearly', async () => {
+  const { fetch, calls } = stubFetchExpiring(2, {});
+  let renewAttempts = 0;
+  const client = new KizApiClient({
+    baseUrl: 'https://example.test',
+    getIdToken: () => 'static-token',
+    renewToken: async () => {
+      renewAttempts += 1;
+      return { renewed: false, renewable: false };
+    },
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(
+    () => handleListRecommendations(client, {}),
+    (err) => {
+      assert.match(String((err as Error).message), /401/);
+      assert.match(String((err as Error).message), /KIZ_EMAIL\/KIZ_PASSWORD/);
+      return true;
+    }
+  );
+  assert.equal(renewAttempts, 1, 'asks once whether renewal is possible');
+  assert.equal(calls.length, 1, 'no retry when the token is not renewable');
+});
+
 // ── 4. Config resolution (pure, env-driven) ──────────────────────────────────
 
 test('loadConfig requires KIZ_API_URL', () => {
@@ -189,6 +265,35 @@ test('loadConfig accepts id-token mode', () => {
   const cfg = loadConfig({ KIZ_API_URL: 'https://api.test', KIZ_ID_TOKEN: 'tok' });
   assert.equal(cfg.auth.kind, 'id-token');
   assert.equal(cfg.apiUrl, 'https://api.test');
+});
+
+test('loadConfig accepts refresh-token mode with a client id', () => {
+  const cfg = loadConfig({
+    KIZ_API_URL: 'https://api.test',
+    KIZ_REFRESH_TOKEN: 'refresh-abc',
+    KIZ_COGNITO_CLIENT_ID: 'client123',
+  });
+  assert.equal(cfg.auth.kind, 'refresh-token');
+  assert.equal(cfg.auth.kind === 'refresh-token' && cfg.auth.refreshToken, 'refresh-abc');
+});
+
+test('loadConfig rejects refresh-token mode without a client id', () => {
+  assert.throws(
+    () => loadConfig({ KIZ_API_URL: 'https://api.test', KIZ_REFRESH_TOKEN: 'refresh-abc' }),
+    ConfigError
+  );
+});
+
+test('loadConfig prefers refresh-token over id-token and password', () => {
+  const cfg = loadConfig({
+    KIZ_API_URL: 'https://api.test',
+    KIZ_REFRESH_TOKEN: 'refresh-abc',
+    KIZ_COGNITO_CLIENT_ID: 'client123',
+    KIZ_ID_TOKEN: 'tok',
+    KIZ_EMAIL: 'u@test',
+    KIZ_PASSWORD: 'pw',
+  });
+  assert.equal(cfg.auth.kind, 'refresh-token');
 });
 
 test('loadConfig accepts password mode with a client id', () => {

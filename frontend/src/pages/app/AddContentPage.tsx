@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { Batch, ImportResult } from '@app/shared';
+import { Clock } from 'lucide-react';
+import type {
+  Batch,
+  ImportResult,
+  KnowledgeDocument,
+  LibraryResponse,
+  RecommendationState,
+} from '@app/shared';
+import { RECOMMENDATION_LABEL } from '@app/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,6 +32,10 @@ export default function AddContentPage() {
   const [notice, setNotice] = useState('');
   const [batch, setBatch] = useState<Batch | null>(null);
   const [createResult, setCreateResult] = useState<ImportResult | null>(null);
+  // The analyzed documents from THIS batch, fetched once the batch is terminal
+  // so the user sees WHAT was added (verdict, score, type) right here instead
+  // of having to open the library and hunt through everything mixed together.
+  const [batchDocs, setBatchDocs] = useState<KnowledgeDocument[] | null>(null);
   // Whether the user just copied the blocked URLs (brief "Copied" confirmation).
   const [copiedBlocked, setCopiedBlocked] = useState(false);
 
@@ -133,6 +145,7 @@ export default function AddContentPage() {
     stopPolling();
     setBatch(null);
     setCreateResult(null);
+    setBatchDocs(null);
 
     // Auto-extract: if the box holds arbitrary text (tabs dump, notes, a list
     // from another tool), pull the http(s) URLs out of it automatically — no
@@ -183,7 +196,12 @@ export default function AddContentPage() {
         const b = await api.get<Batch>(`/imports/${batchId}`);
         setBatch(b);
         // Req 8.11: stop polling once the batch reaches a terminal state.
-        if (isTerminal(b)) stopPolling();
+        if (isTerminal(b)) {
+          stopPolling();
+          // Fetch what was actually analyzed so we can show the per-article
+          // results (verdict, score, type) right on this page.
+          void loadBatchDocs(batchId);
+        }
       } catch (err) {
         // Transient failures are already retried by the api client; surface a
         // persistent failure but keep the last known counts on screen.
@@ -195,6 +213,20 @@ export default function AddContentPage() {
     // then poll on a fixed cadence.
     void poll();
     pollRef.current = setInterval(() => void poll(), POLL_INTERVAL_MS);
+  };
+
+  // Load the analyzed documents belonging to this batch. The library listing is
+  // owner-scoped (newest first, up to 100 per page) and each document carries
+  // its batchId, so the just-finished batch — bounded by the per-day limit —
+  // sits on the first page. We filter client-side by batchId; no backend change.
+  const loadBatchDocs = async (batchId: string) => {
+    try {
+      const res = await api.get<LibraryResponse>('/documents');
+      setBatchDocs(res.documents.filter((d) => d.batchId === batchId));
+    } catch {
+      // Non-fatal: the counters and the "See your library" link still work.
+      setBatchDocs([]);
+    }
   };
 
   const processing = batch !== null && !isTerminal(batch);
@@ -218,6 +250,29 @@ export default function AddContentPage() {
   const failed = batch?.failed ?? 0;
   const done = completed + failed;
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // This-batch stats, derived from the fetched documents: how the verdicts
+  // split (Worth it / Maybe / Skip), how many couldn't be analyzed, and the
+  // total estimated reading time across the batch. Shown as a quick summary
+  // above the per-article list so the batch has a "shape" at a glance.
+  const batchStats = useMemo(() => {
+    if (!batchDocs || batchDocs.length === 0) return null;
+    const byState: Record<RecommendationState, number> = { READ: 0, SKIM: 0, SKIP: 0 };
+    let degraded = 0;
+    let readingMinutes = 0;
+    for (const d of batchDocs) {
+      if (d.degraded) {
+        degraded += 1;
+        continue;
+      }
+      if (d.recommendationState) byState[d.recommendationState] += 1;
+      if (typeof d.readingMinutes === 'number') readingMinutes += d.readingMinutes;
+    }
+    return { byState, degraded, readingMinutes, total: batchDocs.length };
+  }, [batchDocs]);
+
+  // The just-finished batch id, for linking into the library pre-filtered to it.
+  const batchId = batch?.batchId ?? createResult?.batchId;
 
   return (
     <div className="flex flex-col gap-6">
@@ -388,15 +443,56 @@ export default function AddContentPage() {
           )}
 
           {!processing && completed > 0 && (
-            <div className="rounded-md bg-green-50 p-4">
+            <div className="space-y-4 rounded-md bg-green-50 p-4">
               <p className="text-sm text-green-800">
                 {completed} {completed === 1 ? 'link is' : 'links are'} ready in your library.
               </p>
+
+              {/* This-batch summary: verdict split + total reading time, so the
+                  user sees the SHAPE of what they just added without leaving. */}
+              {batchStats && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {(['READ', 'SKIM', 'SKIP'] as const).map((s) =>
+                    batchStats.byState[s] > 0 ? (
+                      <span
+                        key={s}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${BATCH_STATE_STYLES[s]}`}
+                      >
+                        {batchStats.byState[s]} {RECOMMENDATION_LABEL[s]}
+                      </span>
+                    ) : null
+                  )}
+                  {batchStats.degraded > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                      {batchStats.degraded} couldn’t analyze
+                    </span>
+                  )}
+                  {batchStats.readingMinutes > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                      <Clock className="h-3 w-3" /> {batchStats.readingMinutes} min total
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Per-article results of THIS batch (verdict, title, site, MKV,
+                  reading time), most valuable first — same ranking as the
+                  library. Each row opens the document detail. */}
+              {batchDocs && batchDocs.length > 0 && (
+                <ul className="space-y-1.5">
+                  {sortBatchDocs(batchDocs).map((d) => (
+                    <li key={d.documentId}>
+                      <BatchResultRow doc={d} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <Link
-                to="/app/library"
-                className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                to={batchId ? `/app/library?batch=${encodeURIComponent(batchId)}` : '/app/library'}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
               >
-                See your library →
+                See these in your library →
               </Link>
             </div>
           )}
@@ -442,5 +538,90 @@ function ProgressStat({ label, value }: { label: string; value: number }) {
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="text-lg font-semibold text-gray-900">{value}</dd>
     </div>
+  );
+}
+
+// Verdict badge colors — mirror the library (READ=green, SKIM=amber, SKIP=slate)
+// so the signal reads the same everywhere.
+const BATCH_STATE_STYLES: Record<RecommendationState, string> = {
+  READ: 'bg-emerald-100 text-emerald-800',
+  SKIM: 'bg-amber-100 text-amber-800',
+  SKIP: 'bg-slate-200 text-slate-600',
+};
+
+const BATCH_ROW_ACCENT: Record<RecommendationState, string> = {
+  READ: 'border-l-emerald-500',
+  SKIM: 'border-l-amber-500',
+  SKIP: 'border-l-slate-400',
+};
+
+// Rank the batch results the same way the library does: by MKV desc, with
+// documents that couldn't be analyzed sinking to the bottom.
+function sortBatchDocs(docs: KnowledgeDocument[]): KnowledgeDocument[] {
+  return [...docs].sort((a, b) => {
+    const aFailed = Boolean(a.degraded);
+    const bFailed = Boolean(b.degraded);
+    if (aFailed !== bFailed) return aFailed ? 1 : -1;
+    const am = typeof a.scores?.mkv === 'number' ? a.scores.mkv : -1;
+    const bm = typeof b.scores?.mkv === 'number' ? b.scores.mkv : -1;
+    return bm - am;
+  });
+}
+
+// One compact result row for a document in the just-finished batch: verdict,
+// title, site, reading time and MKV. Links to the full detail page.
+function BatchResultRow({ doc }: { doc: KnowledgeDocument }) {
+  const failed = Boolean(doc.degraded);
+  const state = failed ? null : doc.recommendationState;
+  const title = doc.metadata?.title?.trim() || doc.canonicalUrl || doc.rawUrl;
+  const domain = doc.metadata?.sourceDomain ?? '';
+  const minutes = typeof doc.readingMinutes === 'number' ? doc.readingMinutes : null;
+  const mkv = !failed && typeof doc.scores?.mkv === 'number' ? doc.scores.mkv : null;
+  const accent = failed
+    ? 'border-l-rose-300'
+    : state
+      ? BATCH_ROW_ACCENT[state]
+      : 'border-l-gray-200';
+
+  return (
+    <Link
+      to={`/app/library/${doc.documentId}`}
+      className={`block rounded-md border border-l-4 border-gray-200 bg-white px-3 py-2 transition-colors hover:border-indigo-300 hover:bg-indigo-50/30 ${accent}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-1 text-sm font-medium text-gray-900">{title}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
+            {domain && <span className="truncate">{domain}</span>}
+            {minutes !== null && (
+              <span className="inline-flex items-center gap-0.5">
+                · <Clock className="h-3 w-3" /> {minutes} min
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {mkv !== null && (
+            <span
+              className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-gray-600"
+              title="Marginal knowledge value (0–100)"
+            >
+              {mkv}
+            </span>
+          )}
+          {state ? (
+            <span
+              className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide ${BATCH_STATE_STYLES[state]}`}
+            >
+              {RECOMMENDATION_LABEL[state]}
+            </span>
+          ) : (
+            <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-rose-700">
+              Failed
+            </span>
+          )}
+        </div>
+      </div>
+    </Link>
   );
 }

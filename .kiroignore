@@ -1,0 +1,43 @@
+# Artefactos de build (regenerables, solo ruido)
+dist/
+build/
+.vite/
+.next/
+cdk.out/
+.cdk.staging/
+*.tsbuildinfo
+*.js.map
+.deploy-hashes/
+.deploy_cache/
+
+# Dependencias
+node_modules/
+vendor/
+.bundle/
+# Resultados de tests y cobertura (regenerables)
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+.pytest_cache/
+__pycache__/
+
+# Kiro temporal
+.kiro/temp/
+.kiro/cache/
+
+# Secretos y credenciales
+.env
+.env.*
+*.pem
+*.key
+*.p12
+aws-credentials.json
+credentials.json
+.aws_credentials
+.aws-credentials
+
+# Ficheros de SO
+.DS_Store
+Thumbs.db

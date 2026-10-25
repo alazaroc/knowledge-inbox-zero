@@ -81,8 +81,29 @@ describe('AddContentPage polling', () => {
       blocked: [],
       duplicates: 0,
     });
-    // First poll: still processing. Second poll: finished (terminal).
-    mockGet.mockResolvedValueOnce(processingBatch).mockResolvedValueOnce(finishedBatch);
+    // First poll: still processing. Second poll: finished (terminal). When the
+    // batch finishes, the page also loads the batch's documents via
+    // GET /documents to show the per-article results — mock that too.
+    mockGet.mockImplementation((path: string) => {
+      if (path.startsWith('/imports/')) {
+        // Return processing on the first imports poll, finished thereafter.
+        return Promise.resolve(
+          mockGet.mock.calls.filter((c) => String(c[0]).startsWith('/imports/')).length <= 1
+            ? processingBatch
+            : finishedBatch
+        ) as Promise<never>;
+      }
+      // GET /documents — the batch results fetch after it finishes.
+      return Promise.resolve({
+        documents: [],
+        counts: { total: 0, READ: 0, SKIM: 0, SKIP: 0 },
+      }) as Promise<never>;
+    });
+
+    // Count only the batch-progress polls (GET /imports/…); the extra
+    // GET /documents results fetch is a separate, expected call.
+    const importPolls = () =>
+      mockGet.mock.calls.filter((c) => String(c[0]).startsWith('/imports/')).length;
 
     renderPage();
 
@@ -102,19 +123,19 @@ describe('AddContentPage polling', () => {
 
     // POST happened and the immediate first poll (processing batch) ran.
     expect(mockPost).toHaveBeenCalledTimes(1);
-    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(importPolls()).toBe(1);
 
     // Advance one interval → second poll returns the finished (terminal) batch.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
     });
-    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(importPolls()).toBe(2);
 
-    // Terminal reached: advancing further must NOT trigger more polls (Req 8.11).
+    // Terminal reached: advancing further must NOT trigger more progress polls (Req 8.11).
     await act(async () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
     });
-    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(importPolls()).toBe(2);
 
     // UI reflects the finished state.
     expect(screen.getByText('Finished')).toBeInTheDocument();

@@ -48,8 +48,9 @@ export default defineConfig({
         scope: '/',
         lang: 'en',
         categories: ['productivity', 'news', 'utilities'],
+        // NOTE: no SVG icon in the manifest — Google Play / TWA require raster
+        // PNG icons (512px primary). The SVG stays as a scalable favicon only.
         icons: [
-          { src: '/logo.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
           { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

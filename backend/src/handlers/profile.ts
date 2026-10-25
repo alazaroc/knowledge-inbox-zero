@@ -234,6 +234,11 @@ async function syncProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     profileSourceUrl: publicUrl,
     profileRepoUrl: repoUrl,
     outputLanguage: prev?.outputLanguage ?? 'auto',
+    digestEnabled: prev?.digestEnabled,
+    digestDay: prev?.digestDay,
+    digestSlot: prev?.digestSlot,
+    digestTimezone: prev?.digestTimezone,
+    monthlyDigestEnabled: prev?.monthlyDigestEnabled,
     createdAt: prev?.createdAt ?? ts,
     updatedAt: ts,
   };
@@ -306,11 +311,11 @@ async function putProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     new GetCommand({
       TableName: TABLE_NAMES.PROFILES,
       Key: { userId: auth.ctx.sub },
-      ProjectionExpression: 'createdAt',
     })
   );
   const ts = now();
-  const createdAt = (existing.Item?.createdAt as string | undefined) ?? ts;
+  const prev = existing.Item as Profile | undefined;
+  const createdAt = prev?.createdAt ?? ts;
 
   // Replace-all semantics: every stored field is overwritten with the
   // submitted values; `notConfigured` is intentionally not set on a real save.
@@ -326,6 +331,14 @@ async function putProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     profileSourceUrl: body.data.profileSourceUrl ?? '',
     profileRepoUrl: body.data.profileRepoUrl ?? '',
     outputLanguage: body.data.outputLanguage,
+    // Digest fields are edited on the Notifications page, which sends them; the
+    // Knowledge-profile page omits them, so preserve the prior values there
+    // instead of resetting them to defaults.
+    digestEnabled: body.data.digestEnabled ?? prev?.digestEnabled ?? false,
+    digestDay: body.data.digestDay ?? prev?.digestDay ?? 0,
+    digestSlot: body.data.digestSlot ?? prev?.digestSlot ?? 's8',
+    digestTimezone: body.data.digestTimezone ?? prev?.digestTimezone ?? '',
+    monthlyDigestEnabled: body.data.monthlyDigestEnabled ?? prev?.monthlyDigestEnabled ?? false,
     createdAt,
     updatedAt: ts,
   };
