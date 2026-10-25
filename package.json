@@ -1,6 +1,6 @@
 {
   "name": "knowledge-inbox-zero",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Knowledge Inbox Zero — aggressively reduce your reading backlog. Serverless on AWS (React + Vite + CDK + Cognito + Bedrock).",
   "engines": {
