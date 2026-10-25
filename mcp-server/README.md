@@ -1,7 +1,7 @@
-# Knowledge Inbox Zero — MCP server
+# Read Worthy — MCP server
 
 A **Model Context Protocol** server that lets _any_ MCP-capable agent (Kiro,
-Claude Desktop, ChatGPT, Cursor…) use Knowledge Inbox Zero. It is a **thin
+Claude Desktop, ChatGPT, Cursor…) use Read Worthy. It is a **thin
 client** of the deployed HTTP API — it scores nothing locally; each tool call
 maps to one endpoint.
 

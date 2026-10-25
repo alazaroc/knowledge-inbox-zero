@@ -1,4 +1,4 @@
-# Knowledge Inbox Zero — browser extension
+# Read Worthy — browser extension
 
 A tiny toolbar button that sends the **current tab** to your Knowledge Inbox
 Zero inbox with one click. Click it (or press the shortcut) and the link lands

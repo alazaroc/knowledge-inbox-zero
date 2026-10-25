@@ -1,10 +1,10 @@
-# Design Document — Knowledge Inbox Zero
+# Design Document — Read Worthy
 
 ## Overview
 
-Knowledge Inbox Zero reduces a user's reading backlog by identifying the small subset of documents that deserve attention and explaining, per document, **what is materially new** and **why it matters to this user**. The product metric is **attention saved**, not content stored, and its central computation is **Marginal Knowledge Value (MKV)**: how much a document adds _given what this user already knows_.
+Read Worthy reduces a user's reading backlog by identifying the small subset of documents that deserve attention and explaining, per document, **what is materially new** and **why it matters to this user**. The product metric is **attention saved**, not content stored, and its central computation is **Marginal Knowledge Value (MKV)**: how much a document adds _given what this user already knows_.
 
-This design is built on the existing serverless monorepo starter and reuses its conventions verbatim. It does not redesign the foundation; it replaces the example `Item`/`Share` domain with the Knowledge Inbox Zero domain while keeping the `users` (Cognito admin) domain intact.
+This design is built on the existing serverless monorepo starter and reuses its conventions verbatim. It does not redesign the foundation; it replaces the example `Item`/`Share` domain with the Read Worthy domain while keeping the `users` (Cognito admin) domain intact.
 
 ### Design goals
 

@@ -111,8 +111,8 @@ export default function AppLayout() {
           <div className="flex items-center gap-4">
             <Link to="/app" className="flex items-center gap-2 font-semibold text-gray-900">
               <img src="/logo.svg" alt="" className="h-6 w-6" />
-              <span className="hidden sm:inline">Knowledge Inbox Zero</span>
-              <span className="sm:hidden">Inbox Zero</span>
+              <span className="hidden sm:inline">Read Worthy</span>
+              <span className="sm:hidden">Read Worthy</span>
             </Link>
             {!locked && (
               // Desktop: full nav. On mobile the two actions live elsewhere —

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // MCP Contract Guard
 //
-// Asserts the Knowledge Inbox Zero MCP server still exposes EXACTLY the three
+// Asserts the Read Worthy MCP server still exposes EXACTLY the three
 // expected tools, each with a valid (object) input schema. Run on PostFileSave
 // of the mcp-server source as a contract-regression guard (hook #4).
 //

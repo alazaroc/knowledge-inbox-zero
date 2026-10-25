@@ -29,7 +29,7 @@ function makeNaming(): ResourceNaming {
     environment: 'test',
     account: '123456789012',
     version: '0.1.0',
-    repository: 'https://github.com/alazaroc/knowledge-inbox-zero',
+    repository: 'https://github.com/alazaroc/read-worthy',
   });
 }
 

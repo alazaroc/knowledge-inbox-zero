@@ -1,4 +1,4 @@
-// Shared configuration for the Knowledge Inbox Zero browser extension.
+// Shared configuration for the Read Worthy browser extension.
 //
 // Portability: the default base URL points at the public hosted instance, but it
 // is NEVER hardcoded at the call sites — it is only the fallback when the user

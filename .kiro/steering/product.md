@@ -1,6 +1,6 @@
 # Product
 
-**Knowledge Inbox Zero** reduce agresivamente el backlog de lectura. Dado un montón de URLs y un perfil de conocimiento persistente, identifica el pequeño subconjunto que merece atención y explica, por documento, **qué es materialmente nuevo** y **por qué le importa a ESTE usuario ahora**.
+**Read Worthy** reduce agresivamente el backlog de lectura. Dado un montón de URLs y un perfil de conocimiento persistente, identifica el pequeño subconjunto que merece atención y explica, por documento, **qué es materialmente nuevo** y **por qué le importa a ESTE usuario ahora**.
 
 Optimiza **atención ahorrada**, no contenido almacenado. Idea central: **Marginal Knowledge Value (MKV)** — el valor de un doc no es su calidad objetiva sino lo que añade _a este usuario_ dado lo que ya sabe, investiga y ha procesado. Un artículo excelente puede tener MKV casi nulo para quien ya conoce su contenido.
 

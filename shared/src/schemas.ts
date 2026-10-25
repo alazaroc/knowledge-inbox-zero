@@ -15,7 +15,7 @@ const entryList = z
   .refine((arr) => arr.length <= 50, { message: 'At most 50 entries' })
   .refine((arr) => arr.every((s) => s.length <= 200), { message: 'Entry exceeds 200 chars' });
 
-// ---------- Knowledge Inbox Zero domain ----------
+// ---------- Read Worthy domain ----------
 
 // Profile: replace-all semantics; trims entries, drops empties, enforces bounds.
 export const profileSchema = z.object({

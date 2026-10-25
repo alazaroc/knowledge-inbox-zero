@@ -32,7 +32,7 @@ const sqs = new SQSClient({});
 const queueUrl = () => process.env.ANALYSIS_QUEUE_URL ?? '';
 
 /**
- * Read-only library + document detail for the Knowledge Inbox Zero domain.
+ * Read-only library + document detail for the Read Worthy domain.
  *
  * Deterministic only — this handler NEVER calls Bedrock. All reads are scoped
  * to the authenticated owner (`ctx.sub`, Req 7.6).

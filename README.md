@@ -1,14 +1,14 @@
 <div align="center">
 
-# Knowledge Inbox Zero
+# Read Worthy
 
-**Inbox zero, for your reading list.** Paste the links you keep meaning to read — get back the few that actually deserve your attention, and _why_.
+**Only what is read-worthy.** Paste the links you keep meaning to read — get back the few that actually deserve your attention, and _why_.
 
 It optimizes for **attention saved**, not content stored.
 
 🌐 [Live app](https://inbox.playingaws.com) · 📦 [Self-host](INSTALL.md) · 🔌 [MCP & agents](docs/mcp.md)
 
-[![CI/CD Pipeline](https://github.com/alazaroc/knowledge-inbox-zero/actions/workflows/pipeline.yml/badge.svg)](https://github.com/alazaroc/knowledge-inbox-zero/actions/workflows/pipeline.yml)
+[![CI/CD Pipeline](https://github.com/alazaroc/read-worthy/actions/workflows/pipeline.yml/badge.svg)](https://github.com/alazaroc/read-worthy/actions/workflows/pipeline.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen)
 ![AWS Serverless](https://img.shields.io/badge/AWS-serverless-FF9900?logo=amazonaws&logoColor=white)
@@ -48,7 +48,7 @@ Each analyzed link comes back with:
 
 Deterministic-first by design: the LLM is used **only** for extraction and the written explanation — all the scoring is pure, reproducible code. No idle cost when nobody's using it.
 
-![Knowledge Inbox Zero AWS architecture](docs/assets/architecture.webp)
+![Read Worthy AWS architecture](docs/assets/architecture.webp)
 
 - **Frontend** — React + Vite + Tailwind PWA, Cognito auth, on S3 + CloudFront.
 - **Backend** — TypeScript Lambdas (Node 22, ARM64), API Gateway HTTP API, SQS + a worker for async analysis, DynamoDB, S3, Amazon Bedrock.
@@ -56,7 +56,7 @@ Deterministic-first by design: the LLM is used **only** for extraction and the w
 
 ## Use it from an agent (MCP)
 
-Knowledge Inbox Zero speaks [MCP](docs/mcp.md), so any agent (Kiro, Claude Desktop…) can use it: _"add these links to my inbox"_, _"what should I read?"_, _"why is this one a skip?"_. A custom MCP server exposes three tools (`submit_urls`, `list_recommendations`, `explain_document`), and a [Kiro Power](power/) packages it so an agent can connect with no access to this repo.
+Read Worthy speaks [MCP](docs/mcp.md), so any agent (Kiro, Claude Desktop…) can use it: _"add these links to my inbox"_, _"what should I read?"_, _"why is this one a skip?"_. A custom MCP server exposes three tools (`submit_urls`, `list_recommendations`, `explain_document`), and a [Kiro Power](power/) packages it so an agent can connect with no access to this repo.
 
 ## Save a page while you browse
 

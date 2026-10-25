@@ -332,7 +332,7 @@ export class ApiStack extends cdk.Stack {
     // it); overridable by env for forks. SES is in eu-west-1 (account is out of
     // the sandbox there and playingaws.com is a verified domain); it can differ
     // from this stack's region.
-    const digestFrom = process.env.DIGEST_FROM ?? 'Knowledge Inbox Zero <no-reply@playingaws.com>';
+    const digestFrom = process.env.DIGEST_FROM ?? 'Read Worthy <no-reply@playingaws.com>';
     const digestSesRegion = process.env.DIGEST_SES_REGION ?? 'eu-west-1';
     const digestAppUrl = process.env.DIGEST_APP_URL ?? 'https://inbox.playingaws.com';
 

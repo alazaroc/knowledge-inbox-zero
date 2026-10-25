@@ -183,7 +183,7 @@ extension-package:
 # ── Release ──────────────────────────────────────────────────────────────────
 # Bumps the version in package.json (single source of truth), validates, commits, tags and pushes.
 
-## release: validate + bump version + commit + tag + push (+ draft GitHub Release if the repo is public). No BUMP → interactive 1/2/3 (default minor); BUMP=patch|minor|major → non-interactive.
+## release: validate + bump version + commit + tag + push (+ draft GitHub Release ONLY on minor/major if the repo is public; patch = tag only). No BUMP → interactive 1/2/3 (default minor); BUMP=patch|minor|major → non-interactive.
 release:
 	@git diff --quiet && git diff --cached --quiet || \
 	  (echo "❌ Uncommitted changes. Commit or stash before release." && exit 1)
@@ -206,7 +206,7 @@ release:
 	npm version $$BUMP -m "Release v%s" && \
 	git push --follow-tags && \
 	TAG=v$$(node -p "require('./package.json').version"); \
-	if gh repo view --json visibility -q .visibility 2>/dev/null | grep -q PUBLIC; then \
+	if [ "$$BUMP" != patch ] && gh repo view --json visibility -q .visibility 2>/dev/null | grep -q PUBLIC; then \
 	  PREV=$$(git describe --tags --abbrev=0 "$$TAG^" 2>/dev/null); \
 	  if [ -n "$$PREV" ]; then RANGE="$$PREV..$$TAG"; else RANGE="$$TAG"; fi; \
 	  NOTES=$$(git log --no-merges --pretty='- %s' "$$RANGE" | grep -vE '^- Release v' || true); \
@@ -222,7 +222,11 @@ release:
 	  echo "   Review and publish it manually at:" && \
 	  echo "   $$URL"; \
 	else \
-	  echo "✅ Private release (tag only): $$TAG"; \
+	  if [ "$$BUMP" = patch ]; then \
+	    echo "✅ Patch $$TAG (tag + push only, no GitHub Release; rolls up into the next minor)"; \
+	  else \
+	    echo "✅ Private release (tag only): $$TAG"; \
+	  fi; \
 	fi
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────

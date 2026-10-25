@@ -5,7 +5,7 @@
 If you discover a security vulnerability, please report it privately — **do not
 open a public issue**.
 
-Use GitHub's [private vulnerability reporting](https://github.com/alazaroc/knowledge-inbox-zero/security/advisories/new)
+Use GitHub's [private vulnerability reporting](https://github.com/alazaroc/read-worthy/security/advisories/new)
 (Security → Report a vulnerability), or contact the maintainer directly.
 
 Please include:

@@ -101,7 +101,7 @@ export default function SignUpPage() {
           <img src="/logo.svg" alt="" className="h-10 w-10" />
           <h1 className="text-2xl font-semibold text-gray-900">Create your account</h1>
         </div>
-        <p className="mb-6 text-sm text-gray-500">Knowledge Inbox Zero</p>
+        <p className="mb-6 text-sm text-gray-500">Read Worthy</p>
 
         {step === 'FORM' && (
           <form onSubmit={onSignUp} className="space-y-4">

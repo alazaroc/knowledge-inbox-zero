@@ -1,5 +1,5 @@
 /**
- * No-network contract + handler tests for the Knowledge Inbox Zero MCP server.
+ * No-network contract + handler tests for the Read Worthy MCP server.
  *
  * Runs with `node --test` against the compiled output (see package.json `test`).
  * It:

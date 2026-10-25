@@ -1,16 +1,16 @@
 ---
 name: connect-to-inbox-zero
-description: Connect to a hosted Knowledge Inbox Zero and triage reading via its three MCP tools — submit URLs, list READ/SKIM/SKIP recommendations, and read a document's explanation. Use when the user wants to decide what in a pile of links is worth their attention.
+description: Connect to a hosted Read Worthy and triage reading via its three MCP tools — submit URLs, list READ/SKIM/SKIP recommendations, and read a document's explanation. Use when the user wants to decide what in a pile of links is worth their attention.
 ---
 
-# Connect to Knowledge Inbox Zero
+# Connect to Read Worthy
 
 This Power packages the capability to **connect to a hosted Knowledge Inbox
 Zero deployment from any Kiro agent** — it is NOT the application's source code.
 The agent using this Power does not need the repo; it only needs the three MCP
 tools wired by this Power's `mcp.json` and the environment configured below.
 
-Knowledge Inbox Zero answers one question about a pile of links: **what deserves
+Read Worthy answers one question about a pile of links: **what deserves
 the user's attention, and why.** Each analyzed document gets a recommendation
 state — `READ`, `SKIM`, or `SKIP` — an MKV score (0–100, Marginal Knowledge
 Value), and a written explanation of what is genuinely new to this user.

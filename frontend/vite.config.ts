@@ -36,8 +36,8 @@ export default defineConfig({
       includeAssets: ['logo.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
-        name: 'Knowledge Inbox Zero',
-        short_name: 'Inbox Zero',
+        name: 'Read Worthy',
+        short_name: 'ReadWorthy',
         description:
           'Stop hoarding links you never read. An AI filter scores every link against your interests so you only read what is actually worth it.',
         theme_color: '#4f46e5',

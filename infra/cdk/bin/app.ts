@@ -34,7 +34,7 @@ const naming = new ResourceNaming({
   environment: env,
   account,
   version: '0.1.0',
-  repository: 'https://github.com/alazaroc/knowledge-inbox-zero',
+  repository: 'https://github.com/alazaroc/read-worthy',
 });
 
 const stackEnv = { account, region };

@@ -1,4 +1,4 @@
-# Installing & running Knowledge Inbox Zero
+# Installing & running Read Worthy
 
 There are two ways to use this app. Pick the one that fits you.
 
@@ -46,7 +46,7 @@ credentials and account **you** configure. Nothing you deploy touches anyone els
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/alazaroc/knowledge-inbox-zero.git
+git clone https://github.com/alazaroc/read-worthy.git
 cd knowledge-inbox-zero
 make install        # npm ci — clean, reproducible
 make build          # build shared + backend + frontend

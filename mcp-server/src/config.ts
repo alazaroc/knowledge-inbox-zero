@@ -1,5 +1,5 @@
 /**
- * Configuration for the Knowledge Inbox Zero MCP server.
+ * Configuration for the Read Worthy MCP server.
  *
  * Everything comes from the environment — no flags and no hardcoded
  * URLs/tokens/credentials. Auth has THREE modes, in order of how a serious
@@ -61,7 +61,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): KizConfig {
   const apiUrl = env('KIZ_API_URL', source);
   if (!apiUrl) {
     throw new ConfigError(
-      'KIZ_API_URL is required (the deployed Knowledge Inbox Zero API base URL, e.g. ' +
+      'KIZ_API_URL is required (the deployed Read Worthy API base URL, e.g. ' +
         'https://abc123.execute-api.eu-south-2.amazonaws.com). Read it from the stack ' +
         'output `ApiUrl` or the SSM parameter created by the api-stack.'
     );

@@ -2,12 +2,12 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "knowledge-inbox-zero",
   "version": "1.0.0",
-  "description": "Connect any Kiro agent to a hosted Knowledge Inbox Zero: send URLs for analysis and read back which ones deserve attention (READ/SKIM/SKIP) with per-document explanations and MKV scores.",
+  "description": "Connect any Kiro agent to a hosted Read Worthy: send URLs for analysis and read back which ones deserve attention (READ/SKIM/SKIP) with per-document explanations and MKV scores.",
   "author": {
     "name": "Alejandro Lazaro Chueca"
   },
   "keywords": [
-    "knowledge inbox zero",
+    "read-worthy",
     "reading backlog",
     "reading list",
     "read it later",
@@ -17,7 +17,7 @@
     "mkv",
     "marginal knowledge value"
   ],
-  "homepage": "https://github.com/alazaroc/knowledge-inbox-zero",
-  "repository": "https://github.com/alazaroc/knowledge-inbox-zero",
+  "homepage": "https://github.com/alazaroc/read-worthy",
+  "repository": "https://github.com/alazaroc/read-worthy",
   "license": "MIT"
 }

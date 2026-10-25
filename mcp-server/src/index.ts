@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Knowledge Inbox Zero MCP server (stdio transport).
+ * Read Worthy MCP server (stdio transport).
  *
- * A thin client of the deployed Knowledge Inbox Zero API. On startup it reads
+ * A thin client of the deployed Read Worthy API. On startup it reads
  * its configuration from the environment, resolves a Cognito id token, and
  * exposes three tools over stdio: submit_urls, list_recommendations,
  * explain_document.

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-**Knowledge Inbox Zero** is a tool that aggressively reduces a user's knowledge/reading backlog. It is **not** a read-it-later app, **not** a bookmark manager, and **not** another place to store content. Given a messy backlog of URLs and a persistent personal knowledge profile, the app identifies the small subset of documents that genuinely deserve the user's attention and explains, in plain language, **what is materially new** and **why it matters to this specific user right now**.
+**Read Worthy** is a tool that aggressively reduces a user's knowledge/reading backlog. It is **not** a read-it-later app, **not** a bookmark manager, and **not** another place to store content. Given a messy backlog of URLs and a persistent personal knowledge profile, the app identifies the small subset of documents that genuinely deserve the user's attention and explains, in plain language, **what is materially new** and **why it matters to this specific user right now**.
 
 The product optimizes for **attention saved**, not content stored. Its central idea is **Marginal Knowledge Value**: a document's worth is not its objective quality but the additional value it provides _to this user_, given what they already know, what they are researching, and what they have already processed. A well-written, high-quality article can have near-zero marginal value to a user who already knows its content.
 

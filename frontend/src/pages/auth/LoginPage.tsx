@@ -177,7 +177,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm sm:p-10">
         <div className="mb-8 flex flex-col items-center text-center">
           <img src="/logo.svg" alt="" className="h-14 w-14" />
-          <h1 className="mt-4 text-2xl font-semibold text-gray-900">Knowledge Inbox Zero</h1>
+          <h1 className="mt-4 text-2xl font-semibold text-gray-900">Read Worthy</h1>
           <p className="mt-1 text-sm text-gray-500">Welcome back — sign in to continue</p>
         </div>
 

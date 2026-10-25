@@ -1,7 +1,7 @@
 # MCP server
 
 The `mcp-server/` workspace is a **Model Context Protocol** server that lets any
-MCP-capable agent use Knowledge Inbox Zero over `stdio`. It is a **thin client**
+MCP-capable agent use Read Worthy over `stdio`. It is a **thin client**
 of the deployed HTTP API — it performs no scoring, extraction, or
 classification locally; every tool call maps to one API endpoint.
 
@@ -203,7 +203,7 @@ In a Kiro cloud session you do not need the repo — install the **Kiro Power**
 (`power/`), which wires this same server from any agent. Set the `KIZ_*`
 environment the Power's `mcp.json` expects (API URL + an id token, or the
 email/password trio), then just talk to the agent: "add these links to my
-Knowledge Inbox Zero", "what should I read?", "why is this one a SKIP?". See
+Read Worthy", "what should I read?", "why is this one a SKIP?". See
 [`power/skills/connect-to-inbox-zero/SKILL.md`](../power/skills/connect-to-inbox-zero/SKILL.md).
 
 ## Testing
@@ -251,7 +251,7 @@ Add it to `.kiro/settings/mcp.json` (project) or your user-level MCP config:
 }
 ```
 
-Then just talk to Kiro: _"add these 5 links to my Knowledge Inbox Zero"_, _"what
+Then just talk to Kiro: _"add these 5 links to my Read Worthy"_, _"what
 should I read?"_, _"why is this one a SKIP?"_. Kiro picks the tool from its
 description and shows you the result.
 
@@ -302,7 +302,7 @@ complex one.
 | **A2A**     | agents **↔ to each other** as peers | an `AgentCard` at `/.well-known/agent.json`    | two or more autonomous agents must discover and delegate to each other                 |
 | **OpenAPI** | describes **REST endpoints**        | an `openapi.json` document                     | you already have a REST API and want a machine-readable contract / quick bridge        |
 
-**Why MCP for Knowledge Inbox Zero.** The need is "let any agent send links to my
+**Why MCP for Read Worthy.** The need is "let any agent send links to my
 app and read the recommendations back" — an agent reaching **tools**, the
 vertical MCP case. A2A would be over-engineering (there is no second autonomous
 agent to negotiate with; the `AgentCard` you may have seen is an A2A artifact and

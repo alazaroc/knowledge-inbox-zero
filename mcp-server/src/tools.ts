@@ -1,5 +1,5 @@
 /**
- * The three Knowledge Inbox Zero MCP tools.
+ * The three Read Worthy MCP tools.
  *
  * Each tool is a thin wrapper over a single deployed API endpoint — this server
  * never scores or classifies anything itself. Input is validated with zod; the
@@ -110,9 +110,9 @@ export async function handleExplainDocument(
 export const TOOL_DEFINITIONS = [
   {
     name: 'submit_urls',
-    title: 'Submit URLs to Knowledge Inbox Zero',
+    title: 'Submit URLs to Read Worthy',
     description:
-      "Send one or more URLs to the user's Knowledge Inbox Zero for analysis. " +
+      "Send one or more URLs to the user's Read Worthy for analysis. " +
       'Maps to POST /imports. Returns the created batch summary (batchId, pending, ' +
       'total, duplicates, blocked, rejected). Analysis is asynchronous.',
     inputSchema: submitUrlsInput,
@@ -121,7 +121,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'list_recommendations',
-    title: 'List Knowledge Inbox Zero recommendations',
+    title: 'List Read Worthy recommendations',
     description:
       'List the analyzed documents with their recommendation state (READ/SKIM/SKIP), ' +
       'MKV score, and title/url. Optionally filter by state. Maps to GET /documents.',
@@ -131,7 +131,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'explain_document',
-    title: 'Explain a Knowledge Inbox Zero document',
+    title: 'Explain a Read Worthy document',
     description:
       'Fetch the full recommendation for one document: the written LLM explanation, ' +
       'the scores, and the state. Maps to GET /documents/{documentId}.',

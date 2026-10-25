@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import PageLoader from '../components/ui/PageLoader';
 import GithubIcon from '../components/ui/GithubIcon';
 
-const GITHUB_URL = 'https://github.com/alazaroc/knowledge-inbox-zero';
+const GITHUB_URL = 'https://github.com/alazaroc/read-worthy';
 
 export default function LandingPage() {
   const { user, loading } = useAuth();
@@ -32,7 +32,7 @@ export default function LandingPage() {
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
         <div className="flex items-center gap-2 font-semibold">
           <img src="/logo.svg" alt="" className="h-7 w-7" />
-          Knowledge Inbox Zero
+          Read Worthy
         </div>
         <div className="flex items-center gap-4 text-sm">
           <a
@@ -65,9 +65,9 @@ export default function LandingPage() {
             <br className="hidden sm:block" /> You read almost none of them.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-600">
-            Knowledge Inbox Zero scores every link against what you already know and what you
-            actually care about, then tells you whether it&apos;s worth reading, skimming, or
-            skipping. You read only what adds something — the rest stops weighing on you.
+            Read Worthy scores every link against what you already know and what you actually care
+            about, then tells you whether it&apos;s worth reading, skimming, or skipping. You read
+            only what adds something — the rest stops weighing on you.
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link
@@ -91,7 +91,7 @@ export default function LandingPage() {
         <section className="mx-auto max-w-4xl px-4 pb-16">
           <img
             src="/screenshot-library.png"
-            alt="Knowledge Inbox Zero library: your links scored and sorted most valuable first, each with a Worth it / Maybe / Skip verdict, a short reason and an MKV score, plus the attention-saved metric."
+            alt="Read Worthy library: your links scored and sorted most valuable first, each with a Worth it / Maybe / Skip verdict, a short reason and an MKV score, plus the attention-saved metric."
             className="w-full rounded-2xl border border-gray-200 shadow-xl shadow-indigo-100/50"
             loading="lazy"
           />
@@ -252,7 +252,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-gray-100">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-gray-400 sm:flex-row">
-          <span>Knowledge Inbox Zero — built with Kiro on AWS serverless.</span>
+          <span>Read Worthy — built with Kiro on AWS serverless.</span>
           <a
             href={GITHUB_URL}
             target="_blank"

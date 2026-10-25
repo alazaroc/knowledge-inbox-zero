@@ -1,8 +1,8 @@
-# Implementation Plan: Knowledge Inbox Zero
+# Implementation Plan: Read Worthy
 
 ## Overview
 
-This plan builds Knowledge Inbox Zero as a sequence of vertical, deployable slices on top of the existing serverless monorepo starter. Each slice keeps `npm run build` and `npm run validate` green and leaves the app deployable (NFR-4.3). The pure deterministic core (canonicalization + MKV scoring) is built test-first with fast-check property tests (Properties 1–16) before it is wired into infrastructure. The example `items`/`shares` domain is left in place and removed only as a late migration task once the new domain ships green; the `users` admin domain is kept unchanged.
+This plan builds Read Worthy as a sequence of vertical, deployable slices on top of the existing serverless monorepo starter. Each slice keeps `npm run build` and `npm run validate` green and leaves the app deployable (NFR-4.3). The pure deterministic core (canonicalization + MKV scoring) is built test-first with fast-check property tests (Properties 1–16) before it is wired into infrastructure. The example `items`/`shares` domain is left in place and removed only as a late migration task once the new domain ships green; the `users` admin domain is kept unchanged.
 
 Implementation language: **TypeScript** (matches the repo stack — Node 22 ARM64 ESM, AWS SDK v3, Zod). Local `.ts` imports use `.js` extensions per repo convention.
 

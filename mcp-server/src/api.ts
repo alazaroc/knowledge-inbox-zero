@@ -1,5 +1,5 @@
 /**
- * Thin HTTP client for the deployed Knowledge Inbox Zero API.
+ * Thin HTTP client for the deployed Read Worthy API.
  *
  * This client does NOT re-implement any scoring, extraction, or recommendation
  * logic — all of that lives in the deployed backend. It only:

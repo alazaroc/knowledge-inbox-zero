@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in Knowledge Inbox Zero! Contributions are welcome.
+Thanks for your interest in Read Worthy! Contributions are welcome.
 
 ## Try the app first
 
@@ -8,8 +8,8 @@ Before contributing, [try the hosted app](https://inbox.playingaws.com) — it's
 
 ## Not sure where to start?
 
-- **An idea, question, or something to discuss?** Open a [GitHub Discussion](https://github.com/alazaroc/knowledge-inbox-zero/discussions) — good for anything that isn't yet a concrete bug or feature.
-- **A concrete bug or feature?** Open an [issue](https://github.com/alazaroc/knowledge-inbox-zero/issues) (see below).
+- **An idea, question, or something to discuss?** Open a [GitHub Discussion](https://github.com/alazaroc/read-worthy/discussions) — good for anything that isn't yet a concrete bug or feature.
+- **A concrete bug or feature?** Open an [issue](https://github.com/alazaroc/read-worthy/issues) (see below).
 - **Code ready to go?** Open a pull request.
 
 ## Code of Conduct
@@ -34,7 +34,7 @@ Open an issue describing the feature, the use case, and why it fits the product 
 Requires Node.js ≥ 22. See [INSTALL.md](INSTALL.md) for the full AWS setup.
 
 ```bash
-git clone https://github.com/alazaroc/knowledge-inbox-zero.git
+git clone https://github.com/alazaroc/read-worthy.git
 cd knowledge-inbox-zero
 
 make install        # npm ci — clean, reproducible

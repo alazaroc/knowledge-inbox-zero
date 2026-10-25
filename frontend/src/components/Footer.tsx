@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import GithubIcon from './ui/GithubIcon';
 
-const APP_VERSION = 'v1.0.0';
-const REPO_URL = 'https://github.com/alazaroc/knowledge-inbox-zero';
+const APP_VERSION = 'v1.2.0';
+const REPO_URL = 'https://github.com/alazaroc/read-worthy';
 const BLOG_URL = 'https://www.playingaws.com';
 const GITHUB_URL = 'https://github.com/alazaroc';
 const LINKEDIN_URL = 'https://www.linkedin.com/in/alejandrolazaro';
@@ -61,7 +61,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="About Knowledge Inbox Zero"
+      aria-label="About Read Worthy"
       onClick={onClose}
     >
       <div
@@ -79,13 +79,13 @@ function AboutModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex items-center gap-2">
           <img src="/logo.svg" alt="" className="h-7 w-7" />
-          <h2 className="text-lg font-semibold text-gray-900">Knowledge Inbox Zero</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Read Worthy</h2>
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-gray-600">
           Paste the links you keep meaning to read. Each one is fetched, extracted and scored for
-          how much it is worth your attention, so you can read what matters and skip the rest —
-          inbox zero for your reading list.
+          how much it is worth your attention, so you can read what matters and skip the rest — only
+          what is read-worthy.
         </p>
 
         <p className="mt-3 text-sm leading-relaxed text-gray-600">

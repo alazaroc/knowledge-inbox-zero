@@ -35,7 +35,7 @@ export interface ApiList<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Knowledge Inbox Zero domain
+// Read Worthy domain
 // ---------------------------------------------------------------------------
 
 // Per-user knowledge profile — the single source of "what this user already

@@ -42,7 +42,7 @@ const cognito = new CognitoIdentityProviderClient({});
 const ses = new SESv2Client({ region: process.env.DIGEST_SES_REGION || process.env.AWS_REGION });
 
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID ?? '';
-// Verified SES sender, e.g. "Knowledge Inbox Zero <no-reply@playingaws.com>".
+// Verified SES sender, e.g. "Read Worthy <no-reply@playingaws.com>".
 const DIGEST_FROM = process.env.DIGEST_FROM ?? '';
 // Public app URL so the email can deep-link back into the library.
 const APP_URL = (process.env.DIGEST_APP_URL ?? '').replace(/\/+$/, '');
@@ -389,7 +389,10 @@ function actionLinks(d: KnowledgeDocument): string {
   return `<div style="font-size:12px;margin-top:8px;">${parts.join(sep)}</div>`;
 }
 
-/** Full detail row for a READ / starred item: thumbnail + title + why + what + key claims. */
+/** Full detail row for a READ / starred item: a header (thumbnail left, chip +
+ * title + priority right) over a FULL-WIDTH body (why / what / claims / links).
+ * Keeping the body full-width stops the text being crushed into a narrow column
+ * next to the image on phones. */
 function detailRow(d: KnowledgeDocument): string {
   const title = esc(d.metadata?.title?.trim() || d.canonicalUrl || d.rawUrl || 'Untitled');
   const url = esc(d.canonicalUrl || d.rawUrl || '#');
@@ -397,13 +400,16 @@ function detailRow(d: KnowledgeDocument): string {
   const what = esc((d.extraction?.summary ?? '').trim());
   const claims = (d.extraction?.claims ?? []).slice(0, 5).map((c) => esc(c.trim()));
   return `
-    <tr><td style="padding:0;border-bottom:1px solid #eee;">
-    <table style="width:100%;border-collapse:collapse;"><tr>
-      ${thumbCell(d)}
-      <td valign="top" style="padding:14px 0;">
-        <div style="margin-bottom:4px;">${verdictChip(d.recommendationState)}</div>
-        <a href="${url}" style="font-size:16px;font-weight:600;color:#111;text-decoration:none;">${title}</a>
-        ${priorityBar(d.scores?.mkv)}
+    <tr><td style="padding:14px 0;border-bottom:1px solid #eee;">
+      <table style="width:100%;border-collapse:collapse;"><tr>
+        ${thumbCell(d)}
+        <td valign="top" style="padding:0;">
+          <div style="margin-bottom:4px;">${verdictChip(d.recommendationState)}</div>
+          <a href="${url}" style="font-size:16px;font-weight:600;color:#111;text-decoration:none;">${title}</a>
+          ${priorityBar(d.scores?.mkv)}
+        </td>
+      </tr></table>
+      <div style="margin-top:10px;">
         ${why ? `<div style="font-size:13px;color:#555;margin-top:6px;"><strong>Why for you:</strong> ${why}</div>` : ''}
         ${what ? `<div style="font-size:13px;color:#555;margin-top:4px;"><strong>What it says:</strong> ${what}</div>` : ''}
         ${
@@ -414,27 +420,29 @@ function detailRow(d: KnowledgeDocument): string {
             : ''
         }
         ${actionLinks(d)}
-      </td>
-    </tr></table>
+      </div>
     </td></tr>`;
 }
 
-/** Compact row for SKIM / SKIP items: small thumbnail + verdict chip + title + short note. */
+/** Compact row for SKIM / SKIP items: header (small thumb left, chip + title
+ * right) over a full-width note + links. */
 function compactRow(d: KnowledgeDocument): string {
   const title = esc(d.metadata?.title?.trim() || d.canonicalUrl || d.rawUrl || 'Untitled');
   const url = esc(d.canonicalUrl || d.rawUrl || '#');
   const why = d.explanationUnavailable ? '' : esc((d.explanation ?? '').trim());
   return `
-    <tr><td style="padding:0;border-bottom:1px solid #f1f1f1;">
-    <table style="width:100%;border-collapse:collapse;"><tr>
-      ${thumbCell(d, 48)}
-      <td valign="top" style="padding:12px 0;">
-        <div style="margin-bottom:3px;">${verdictChip(d.recommendationState)}</div>
-        <a href="${url}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${title}</a>
-        ${why ? `<div style="font-size:12px;color:#777;margin-top:2px;">${why}</div>` : ''}
+    <tr><td style="padding:12px 0;border-bottom:1px solid #f1f1f1;">
+      <table style="width:100%;border-collapse:collapse;"><tr>
+        ${thumbCell(d, 48)}
+        <td valign="top" style="padding:0;">
+          <div style="margin-bottom:3px;">${verdictChip(d.recommendationState)}</div>
+          <a href="${url}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${title}</a>
+        </td>
+      </tr></table>
+      <div style="margin-top:8px;">
+        ${why ? `<div style="font-size:12px;color:#777;">${why}</div>` : ''}
         ${actionLinks(d)}
-      </td>
-    </tr></table>
+      </div>
     </td></tr>`;
 }
 

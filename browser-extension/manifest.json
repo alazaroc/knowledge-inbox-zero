@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Knowledge Inbox Zero — Save tab",
+  "name": "Read Worthy — Save tab",
   "version": "1.0.0",
-  "description": "One-click save of the current tab to your Knowledge Inbox Zero inbox. Uses your existing logged-in browser session — no token needed.",
+  "description": "One-click save of the current tab to your Read Worthy inbox. Uses your existing logged-in browser session — no token needed.",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Save this tab to Knowledge Inbox Zero",
+    "default_title": "Save this tab to Read Worthy",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -27,7 +27,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "Save the current tab to Knowledge Inbox Zero"
+      "description": "Save the current tab to Read Worthy"
     }
   },
   "permissions": ["tabs", "storage"],

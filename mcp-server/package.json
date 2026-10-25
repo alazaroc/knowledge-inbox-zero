@@ -2,7 +2,7 @@
   "name": "knowledge-inbox-zero-mcp-server",
   "version": "1.0.1",
   "type": "module",
-  "description": "MCP server exposing Knowledge Inbox Zero to any Kiro agent — a thin client of the deployed API (submit URLs, list recommendations, explain a document).",
+  "description": "MCP server exposing Read Worthy to any Kiro agent — a thin client of the deployed API (submit URLs, list recommendations, explain a document).",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -11,10 +11,10 @@
     "recommendations",
     "kiro"
   ],
-  "homepage": "https://github.com/alazaroc/knowledge-inbox-zero/tree/main/mcp-server",
+  "homepage": "https://github.com/alazaroc/read-worthy/tree/main/mcp-server",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alazaroc/knowledge-inbox-zero.git",
+    "url": "git+https://github.com/alazaroc/read-worthy.git",
     "directory": "mcp-server"
   },
   "author": "Alejandro Lazaro Chueca",
