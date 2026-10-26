@@ -27,7 +27,7 @@ Open a GitHub issue with:
 
 ## Suggesting features
 
-Open an issue describing the feature, the use case, and why it fits the product — remember the one question the product answers: _what deserves this user's attention, and why?_ Changes that turn it into a bookmark manager, read-it-later app, or RSS reader are out of scope (see the [README](README.md#scope)).
+Open an issue describing the feature, the use case, and why it fits the product — remember the one question the product answers: _what deserves this user's attention, and why?_ Changes that turn it into a bookmark manager, read-it-later app, or RSS reader are out of scope (see the [README](README.md#what-read-worthy-is-not)).
 
 ## Development setup
 
@@ -69,7 +69,7 @@ Backend convention: **one handler file per domain** in `backend/src/handlers/`, 
 
 - **TypeScript** everywhere (ESM; local `.ts` imports use `.js` extensions).
 - **Zod** at external boundaries (request bodies, env).
-- **Deterministic-first**: invoke Bedrock only for structured extraction and the written explanation; everything else stays pure.
+- **Deterministic-first for cost**: keep MKV math, canonicalization and dedup pure; invoke Bedrock for structured extraction, semantic scoring (relevance/novelty/redundancy) and the written explanation — not for anything a deterministic path handles well. A deterministic scorer stays as the fallback.
 - **Tests**: Jest (backend) and Vitest (frontend). Use `fast-check` property tests for the deterministic logic in `@app/shared`.
 - Reuse existing repo patterns; avoid adding dependencies without justification.
 

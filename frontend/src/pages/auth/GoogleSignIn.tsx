@@ -5,17 +5,33 @@ import { isGoogleSsoEnabled } from '../../lib/amplify';
  * "Continue with Google" button + divider. Renders nothing when Google SSO is
  * not configured (no Hosted UI domain), so the email/password form stands alone
  * on a clone with no Google credentials.
+ *
+ * `position` controls where the divider sits relative to the button:
+ * - 'below' (default): divider on top, button under it — use when the component
+ *   renders UNDER the email/password form.
+ * - 'above': button on top, divider under it — use when Google is the primary,
+ *   first action ABOVE the form (best for conversion from a cold click).
  */
-export default function GoogleSignIn({ label }: { label: string }) {
+export default function GoogleSignIn({
+  label,
+  position = 'below',
+}: {
+  label: string;
+  position?: 'above' | 'below';
+}) {
   if (!isGoogleSsoEnabled) return null;
+
+  const divider = (
+    <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
+      <span className="h-px flex-1 bg-gray-200" />
+      or
+      <span className="h-px flex-1 bg-gray-200" />
+    </div>
+  );
 
   return (
     <>
-      <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
-        <span className="h-px flex-1 bg-gray-200" />
-        or
-        <span className="h-px flex-1 bg-gray-200" />
-      </div>
+      {position === 'below' && divider}
       <button
         type="button"
         onClick={() => void signInWithRedirect({ provider: 'Google' })}
@@ -41,6 +57,7 @@ export default function GoogleSignIn({ label }: { label: string }) {
         </svg>
         {label}
       </button>
+      {position === 'above' && divider}
     </>
   );
 }

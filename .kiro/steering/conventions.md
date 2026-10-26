@@ -21,7 +21,7 @@ Convenciones ganadas con dolor. Mantén cada slice con `make build` + `make vali
 
 ## Cost guardrails (deterministic-first) — V1
 
-- Bedrock SOLO para extracción estructurada + explicación escrita (+ draft de perfil). Todo lo demás determinista; prefiere el camino determinista si evita una llamada LLM sin perder output.
+- Bedrock para extracción estructurada, scoring semántico (relevance/novelty/redundancy contra el perfil) y explicación escrita (+ draft de perfil). El resto determinista (freshness, cálculo MKV, ajuste por feedback); prefiere el camino determinista si evita una llamada LLM sin perder output, y mantén el scorer determinista de `@app/shared` como fallback.
 - Sin infra always-on ni coste en reposo: nada de ECS/EKS, RDS, OpenSearch Serverless en V1.
 - Sin vector DB / embeddings en V1: es Tier B tras el flag `EMBEDDINGS_ENABLED` (default off); el camino por conceptos deterministas es el default.
 - DynamoDB PAY_PER_REQUEST, Lambda ARM64, SQS para trabajo multi-doc async. Dimensionado para decenas-cientos de docs por usuario, no millones.

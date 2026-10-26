@@ -20,7 +20,9 @@ It optimizes for **attention saved**, not content stored.
 
 ## Try it
 
-No install, no setup. **[Open the app](https://read.playingaws.com)**, sign up with your email, and paste a few links.
+No install, no setup. **[Open the app](https://read.playingaws.com)**, sign up with Google or your email, and paste a few links.
+
+If you find the idea useful, ⭐ starring the repo helps others discover it.
 
 ## What makes it different
 
@@ -38,6 +40,8 @@ Each analyzed link comes back with:
 2. **Paste your links** — up to 500 at once; they're analyzed in the background, nothing blocks.
 3. **Read only what counts** — your library, newest and most valuable first, with _attention saved_ as the headline metric.
 
+Keep the best recommendations in your To Read list, get optional weekly/monthly digests, and use feedback to continuously tune the ranking.
+
 ## See it
 
 ▶️ **[Watch the 3-minute demo](https://youtu.be/w5zU5v465N4)** — profile, import, library, browser extension, and an agent driving it over MCP.
@@ -46,7 +50,7 @@ Each analyzed link comes back with:
 
 ## Built on AWS, fully serverless
 
-Deterministic-first by design: the LLM is used **only** for extraction and the written explanation — all the scoring is pure, reproducible code. No idle cost when nobody's using it.
+Hybrid by design: Bedrock semantically scores relevance, novelty and redundancy against your profile, while freshness, the final MKV calculation and feedback adjustments stay pure, reproducible code. A deterministic scorer is kept as a fallback, so a Bedrock failure degrades gracefully instead of breaking. No idle cost when nobody's using it.
 
 ![Read Worthy AWS architecture](docs/assets/architecture.webp)
 
@@ -65,6 +69,10 @@ An optional [browser extension](browser-extension/README.md) adds a one-click bu
 ## Run it yourself
 
 It's open source and built to be copied — self-host it on your own AWS account in about 20 minutes. See **[INSTALL.md](INSTALL.md)** to deploy and **[CONTRIBUTING.md](CONTRIBUTING.md)** to hack on it. Issues and PRs are welcome.
+
+## What Read Worthy is not
+
+It optimizes for **attention saved**, not content stored — so it deliberately leaves things out. It is **not** a bookmark manager, **not** a read-it-later app, **not** an RSS reader, and **not** a general knowledge base. Every decision answers one question: _what deserves this user's attention, and why?_ Changes that turn it into one of those are out of scope.
 
 ---
 
