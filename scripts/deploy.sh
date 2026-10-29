@@ -190,6 +190,9 @@ deploy_frontend() {
     return
   fi
 
+  echo "▶ Build shared"
+  npm run build -w shared
+
   echo "▶ Build frontend with env vars"
   VITE_USER_POOL_ID="$USER_POOL_ID" \
     VITE_USER_POOL_CLIENT_ID="$USER_POOL_CLIENT_ID" \

@@ -17,7 +17,7 @@ What would you like to happen?
 
 The product answers one question: _what deserves this user's attention, and why?_
 How does this fit? (Note: turning it into a bookmark manager, read-it-later app,
-or RSS reader is out of scope — see the [README](../../README.md#scope).)
+or RSS reader is out of scope — see the [README](../../README.md#what-read-worthy-is-not).)
 
 ## Alternatives considered
 

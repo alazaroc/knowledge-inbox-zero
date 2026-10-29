@@ -190,6 +190,7 @@ export default function LoginPage() {
 
         {step === 'CREDENTIALS' && (
           <form onSubmit={onCredentials} className="space-y-5">
+            <GoogleSignIn label="Continue with Google" position="above" />
             <Field label="Email">
               <input
                 type="email"
@@ -225,7 +226,6 @@ export default function LoginPage() {
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <SubmitBtn loading={loading}>Sign in</SubmitBtn>
-            <GoogleSignIn label="Continue with Google" />
             <p className="text-center text-sm text-gray-500">
               No account yet?{' '}
               <Link to="/signup" className="font-medium text-indigo-600 hover:underline">

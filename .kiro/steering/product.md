@@ -35,7 +35,7 @@ Every product decision answers one question: **"What deserves this user's attent
 
 ## Key behaviors to preserve
 
-- **Deterministic-first.** Canonicalization, dedup, metadata, and all MKV math are deterministic. Bedrock is invoked **only** for structured extraction and the written explanation.
+- **Deterministic-first for cost, hybrid scoring.** Canonicalization, dedup, metadata, freshness, the final MKV calculation and the feedback adjustment are deterministic. Bedrock is invoked for structured extraction, the semantic scoring of relevance/novelty/redundancy against the profile, and the written explanation. A deterministic scorer (`@app/shared`) stays as the fallback when LLM scoring fails or the doc is degraded.
 - **Never hold a request open.** Import returns within 3 seconds; all multi-document analysis runs asynchronously via SQS + a worker Lambda. The UI polls batch progress.
 - **Graceful degradation.** A bad URL never fails the batch; the system still produces a recommendation from whatever it obtained (even metadata-only).
 - **Per-user privacy.** Every read/write is scoped to the authenticated Cognito `sub`.

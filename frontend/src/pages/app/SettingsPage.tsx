@@ -393,10 +393,13 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Knowledge profile</h1>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {notConfigured ? 'Welcome to Read Worthy' : 'Knowledge profile'}
+          </h1>
           <p className="text-sm text-gray-500">
-            Your knowledge profile and data sources. This is how we decide what deserves your
-            attention.
+            {notConfigured
+              ? 'One quick step and your library is ready.'
+              : 'Your knowledge profile and data sources. This is how we decide what deserves your attention.'}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -433,15 +436,29 @@ export default function SettingsPage() {
       ) : (
         <>
           {notConfigured && (
-            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800">
-              <p>
-                Welcome! Set up your profile to unlock your library. Write a few lines about
-                yourself and what matters to you, then save.
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-5 text-sm text-indigo-900">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-base font-semibold">Set up your profile — about 1 minute</h2>
+              </div>
+              <p className="mt-2 text-indigo-800">
+                This is the one thing Read Worthy needs from you. We judge every link against{' '}
+                <strong>you</strong> — so a great article about something you already know gets
+                skipped, and the few that genuinely move you forward rise to the top. Without a
+                profile there’s nothing to score against.
               </p>
+              <p className="mt-3 font-medium text-indigo-900">
+                Just write a few lines below about what you do and what you care about. For example:
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-indigo-800">
+                <li>“Backend engineer moving into cloud and AI; skip beginner tutorials.”</li>
+                <li>“Researching retrieval-augmented generation and edge computing right now.”</li>
+                <li>“I already know REST, SQL and Git well — don’t re-explain the basics.”</li>
+              </ul>
               <button
                 type="button"
                 onClick={fillWithExample}
-                className="mt-3 inline-flex items-center gap-1.5 rounded border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                className="mt-4 inline-flex items-center gap-1.5 rounded border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 <Sparkles className="h-4 w-4" /> Fill with an example
               </button>

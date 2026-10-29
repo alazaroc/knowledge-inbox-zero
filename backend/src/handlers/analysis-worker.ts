@@ -33,8 +33,11 @@ import { now } from '../lib/ids.js';
  * SQS-triggered analysis worker — the full per-document pipeline
  * (fetch → extract → score → explain → persist → update counters).
  *
- * This is the ONLY component that invokes Bedrock and S3. It reuses the
- * `@app/shared` scoring core so the identical, property-tested code runs here.
+ * This is the ONLY component that invokes Bedrock and S3. Scoring is HYBRID:
+ * Bedrock semantically scores relevance/novelty/redundancy against the profile
+ * (PRIMARY), while freshness, the MKV calculation and the feedback adjustment
+ * stay deterministic. The pure, property-tested `@app/shared` scoring core runs
+ * here as the FALLBACK when LLM scoring fails or the document is degraded.
  *
  * Resilience (Req 3.6, 3.7, NFR-5): the function uses partial batch failure
  * reporting. A document that fails is marked `failed`, its batch counters are

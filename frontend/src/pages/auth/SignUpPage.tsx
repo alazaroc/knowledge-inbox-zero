@@ -106,6 +106,7 @@ export default function SignUpPage() {
 
         {step === 'FORM' && (
           <form onSubmit={onSignUp} className="space-y-4">
+            <GoogleSignIn label="Sign up with Google" position="above" />
             <Field label="Email">
               <input
                 type="email"
@@ -131,7 +132,6 @@ export default function SignUpPage() {
             </Field>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <SubmitBtn loading={loading}>Sign up</SubmitBtn>
-            <GoogleSignIn label="Sign up with Google" />
           </form>
         )}
 
