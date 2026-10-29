@@ -372,7 +372,7 @@ describe('imports handler — daily quota hard block (USER)', () => {
     expect(usageIncrement()).toBe(10);
   });
 
-  it('hard-blocks the excess and returns the unprocessed URLs', async () => {
+  it('defers the excess (saved, not dropped) and reports the deferred count', async () => {
     authAs(SUB);
     ddbWithUsage(95); // only 5 of today's 100 left
 
@@ -380,23 +380,35 @@ describe('imports handler — daily quota hard block (USER)', () => {
     const res = await handler(postImports(blob));
 
     expect(res.statusCode).toBe(201);
-    const body = JSON.parse(res.body) as { pending: number; blocked: string[]; remaining: number };
+    const body = JSON.parse(res.body) as {
+      pending: number;
+      blocked: string[];
+      deferred: number;
+      remaining: number;
+    };
 
-    // Only 5 enqueued; the remaining 7 are returned as blocked (not dropped).
+    // Only 5 enqueued; the remaining 7 are SAVED to the deferred queue (not
+    // returned as blocked — the deferred queue had room for all of them).
     expect(body.pending).toBe(5);
-    expect(body.blocked).toHaveLength(7);
+    expect(body.deferred).toBe(7);
+    expect(body.blocked).toHaveLength(0);
     expect(body.remaining).toBe(0);
 
-    // The 5 enqueued are the FIRST five; the 7 blocked are the rest, in order.
-    const docs = putItemsForTable<KnowledgeDocument>(TABLE_NAMES.DOCUMENTS);
+    // The 5 enqueued are the FIRST five; the deferred queue item holds the rest.
+    const docs = putItemsForTable<KnowledgeDocument>(TABLE_NAMES.DOCUMENTS).filter(
+      (it) => !it.documentId.startsWith('DEFERRED#')
+    );
     expect(docs).toHaveLength(5);
-    expect(body.blocked).toEqual(Array.from({ length: 7 }, (_, i) => url(i + 5)));
+    const deferred = putItemsForTable<{ documentId: string; urls: string[] }>(
+      TABLE_NAMES.DOCUMENTS
+    ).find((it) => it.documentId === `DEFERRED#${SUB}`);
+    expect(deferred?.urls).toEqual(Array.from({ length: 7 }, (_, i) => url(i + 5)));
 
     // Quota consumed only for the 5 enqueued.
     expect(usageIncrement()).toBe(5);
   });
 
-  it('blocks everything when the day is already exhausted, creating no documents', async () => {
+  it('defers everything when the day is already exhausted, creating no documents', async () => {
     authAs(SUB);
     ddbWithUsage(100); // nothing left today
 
@@ -404,10 +416,15 @@ describe('imports handler — daily quota hard block (USER)', () => {
     const res = await handler(postImports(blob));
 
     expect(res.statusCode).toBe(201);
-    const body = JSON.parse(res.body) as { pending: number; blocked: string[] };
+    const body = JSON.parse(res.body) as { pending: number; blocked: string[]; deferred: number };
     expect(body.pending).toBe(0);
-    expect(body.blocked).toHaveLength(3);
-    expect(putItemsForTable<KnowledgeDocument>(TABLE_NAMES.DOCUMENTS)).toHaveLength(0);
+    expect(body.deferred).toBe(3);
+    expect(body.blocked).toHaveLength(0);
+    // No analysis documents created (only the DEFERRED sentinel is written).
+    const analysisDocs = putItemsForTable<{ documentId: string }>(TABLE_NAMES.DOCUMENTS).filter(
+      (it) => !it.documentId.startsWith('DEFERRED#')
+    );
+    expect(analysisDocs).toHaveLength(0);
     // No quota consumed when nothing was enqueued.
     expect(usageIncrement()).toBeUndefined();
     // No SQS messages sent.

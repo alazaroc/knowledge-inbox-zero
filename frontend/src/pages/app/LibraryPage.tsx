@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Archive,
@@ -167,22 +167,34 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     void load(filter);
   }, [filter]);
 
-  // #5 / #6: restore the scroll position the user left from when they return
-  // from a document. We save window.scrollY into sessionStorage on the way out
-  // (see onRowClick) and restore it once the list has finished loading, so the
-  // user lands back where they were instead of at the top.
+  // #5: restore the scroll position the user left from when they return from a
+  // document, WITHOUT the "jump to top, then snap back" flash. The flash came
+  // from restoring in a post-paint requestAnimationFrame, which lets the browser
+  // paint one frame at the top first. We instead disable the browser's own
+  // scroll restoration and restore in a useLayoutEffect — it runs BEFORE the
+  // browser paints the loaded list, so the first (and only) frame the user sees
+  // is already at the saved position.
   const SCROLL_KEY = 'library:scrollY';
+  // Only restore once per return trip, so later re-renders (filtering, archive,
+  // delete) don't yank the page back to a stale position.
+  const scrollRestored = useRef(false);
   useEffect(() => {
-    if (loading) return;
+    const prev = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = prev;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (loading || scrollRestored.current) return;
     const saved = sessionStorage.getItem(SCROLL_KEY);
     if (saved === null) return;
-    const y = Number(saved);
+    scrollRestored.current = true;
     sessionStorage.removeItem(SCROLL_KEY);
+    const y = Number(saved);
     if (!Number.isFinite(y) || y <= 0) return;
-    // Restore after paint so the list height exists to scroll within.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => window.scrollTo(0, y));
-    });
+    // Synchronous, before paint: no intermediate top frame, no visible jump.
+    window.scrollTo(0, y);
   }, [loading]);
 
   // Remember where we are before opening a document, so returning restores it.
@@ -278,8 +290,7 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNotice, setBulkNotice] = useState('');
   const reanalyzeMany = async (scope: 'all' | 'failed') => {
-    const count =
-      scope === 'failed' ? documents.filter((d) => d.degraded).length : (counts?.total ?? 0);
+    const count = scope === 'failed' ? failedCount : (counts?.total ?? 0);
     const label = scope === 'failed' ? 'retry all failed links' : 're-evaluate your whole library';
     if (
       !window.confirm(
@@ -457,7 +468,13 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [documents]);
 
-  const failedCount = useMemo(() => documents.filter((d) => d.degraded).length, [documents]);
+  // Owner-wide "couldn't analyze" count comes from the authoritative aggregate
+  // (counts.failed), NOT from the loaded page — with pagination the loaded page
+  // holds only a subset, which is exactly the "11 shown but 42 re-analyzed" bug.
+  const failedCount = counts?.failed ?? 0;
+  // How many degraded docs are actually loaded on screen right now (for the
+  // "showing N of M" hint when not all pages are loaded).
+  const failedLoaded = useMemo(() => documents.filter((d) => d.degraded).length, [documents]);
 
   const archivedCount = useMemo(() => documents.filter((d) => d.archived).length, [documents]);
 
@@ -796,8 +813,10 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
           {filter === 'FAILED' && failedCount > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5">
               <p className="text-sm text-rose-800">
-                {failedCount} link{failedCount === 1 ? '' : 's'} couldn&apos;t be analyzed. You can
-                retry them all at once.
+                {failedCount} link{failedCount === 1 ? '' : 's'} couldn&apos;t be analyzed.{' '}
+                {failedLoaded < failedCount
+                  ? `Retrying re-queues all ${failedCount}, including the ${failedCount - failedLoaded} not shown here yet.`
+                  : 'You can retry them all at once.'}
               </p>
               <button
                 type="button"

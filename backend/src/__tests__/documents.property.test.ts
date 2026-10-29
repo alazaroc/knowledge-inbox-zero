@@ -351,7 +351,7 @@ describe('documents handler — Property 16: library grouping + pagination integ
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body) as LibraryResponse;
     expect(body.documents).toHaveLength(0);
-    expect(body.counts).toEqual({ total: 0, READ: 0, SKIM: 0, SKIP: 0 });
+    expect(body.counts).toEqual({ total: 0, READ: 0, SKIM: 0, SKIP: 0, failed: 0 });
     expect(body.nextCursor).toBeUndefined();
   });
 });

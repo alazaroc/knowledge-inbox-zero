@@ -389,6 +389,48 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
+    // ── Deferred-import drainer (EventBridge-scheduled, NOT an API route) ─────
+    // Once a day, re-imports the URLs the daily cap postponed (saved to each
+    // owner's DEFERRED#<ownerId> queue), up to the new day's remaining quota,
+    // and emails the user what it picked up. Reuses the same SES config as the
+    // digest. Fires at 00:30 UTC — just after the daily quota window resets at
+    // 00:00 UTC — so a user's saved links move as early as possible.
+    const deferFn = new NodejsFunction(this, 'DeferProcessorFn', {
+      functionName: naming.standard('defer-processor'),
+      entry: path.join(__dirname, '../../../backend/src/handlers', 'defer-processor.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      tracing: lambda.Tracing.ACTIVE,
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true },
+      // Scans deferred queues + per-owner dedupe/enqueue + SES sends; bounded.
+      timeout: cdk.Duration.seconds(300),
+      memorySize: 512,
+      environment: {
+        ...commonEnv,
+        DIGEST_FROM: digestFrom,
+        DIGEST_SES_REGION: digestSesRegion,
+        DIGEST_APP_URL: digestAppUrl,
+      },
+    });
+    tables.documents.grantReadWriteData(deferFn);
+    tables.batches.grantReadWriteData(deferFn);
+    analysisQueue.grantSendMessages(deferFn);
+    deferFn.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ['cognito-idp:ListUsers'], resources: [userPoolArn] })
+    );
+    deferFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ses:SendEmail'],
+        resources: [`arn:aws:ses:${digestSesRegion}:${this.account}:identity/*`],
+      })
+    );
+    new events.Rule(this, 'DeferProcessorRule', {
+      ruleName: naming.standard('defer-processor'),
+      schedule: events.Schedule.cron({ minute: '30', hour: '0' }),
+      targets: [new eventsTargets.LambdaFunction(deferFn)],
+    });
+
     new ssm.StringParameter(this, 'ApiUrlParam', {
       parameterName: naming.ssm('api-url'),
       stringValue: httpApi.apiEndpoint,

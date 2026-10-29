@@ -368,11 +368,17 @@ async function processDocument(msg: AnalysisMessage): Promise<void> {
     });
     await moveCounters(msg.batchId, 'processing', 'completed');
     await bumpStateCount(msg.ownerId, state);
+    // A degraded "completed" doc (recommendation produced from metadata only)
+    // is what the library shows as "Couldn't analyze"; track it in the aggregate.
+    if (degraded) await bumpFailedCount(msg.ownerId, 1);
   } catch (err) {
     // 9. On any error: mark the document failed, move counters, maybe finish,
     // then rethrow so the record is reported as a batch item failure (Req 3.6).
     await markFailed(msg, reasonOf(err));
     await moveCounters(msg.batchId, 'processing', 'failed');
+    // A hard failure is also "couldn't analyze" to the user; count it so the
+    // chip is accurate. markFailed sets degraded:true to match the UI filter.
+    await bumpFailedCount(msg.ownerId, 1);
     await maybeFinishBatch(msg.batchId);
     throw err;
   }
@@ -722,11 +728,15 @@ async function markFailed(msg: AnalysisMessage, reason: string): Promise<void> {
     new UpdateCommand({
       TableName: TABLE_NAMES.DOCUMENTS,
       Key: { documentId: msg.documentId },
-      UpdateExpression: 'SET #status = :status, failureReason = :reason, updatedAt = :ts',
+      UpdateExpression:
+        'SET #status = :status, failureReason = :reason, degraded = :degraded, updatedAt = :ts',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':status': 'failed',
         ':reason': reason,
+        // A hard failure is surfaced to the user as "Couldn't analyze"; the
+        // library keys that category off `degraded`, so mark it here too.
+        ':degraded': true,
         ':ts': now(),
       },
     })
@@ -747,6 +757,26 @@ async function bumpStateCount(ownerId: string, state: RecommendationState): Prom
       UpdateExpression: `ADD #total :one, #state :one SET ownerId = :o, updatedAt = :ts`,
       ExpressionAttributeNames: { '#total': 'total', '#state': state },
       ExpressionAttributeValues: { ':one': 1, ':o': ownerId, ':ts': now() },
+    })
+  );
+}
+
+/**
+ * Bump the per-owner `failed` aggregate counter by `delta` (+1 when a document
+ * ends up "couldn't analyze" / degraded, -1 when such a document is later
+ * re-analyzed or deleted). Kept separate from the state counters so the
+ * library's "Couldn't analyze" chip is O(1) and pagination-independent — it
+ * cannot be derived from a single loaded page.
+ */
+async function bumpFailedCount(ownerId: string, delta: number): Promise<void> {
+  if (delta === 0) return;
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAMES.DOCUMENTS,
+      Key: { documentId: `COUNTS#${ownerId}` },
+      UpdateExpression: `ADD #failed :d SET ownerId = :o, updatedAt = :ts`,
+      ExpressionAttributeNames: { '#failed': 'failed' },
+      ExpressionAttributeValues: { ':d': delta, ':o': ownerId, ':ts': now() },
     })
   );
 }

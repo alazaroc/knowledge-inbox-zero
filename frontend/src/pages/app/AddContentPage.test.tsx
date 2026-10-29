@@ -96,7 +96,7 @@ describe('AddContentPage polling', () => {
       // GET /documents — the batch results fetch after it finishes.
       return Promise.resolve({
         documents: [],
-        counts: { total: 0, READ: 0, SKIM: 0, SKIP: 0 },
+        counts: { total: 0, READ: 0, SKIM: 0, SKIP: 0, failed: 0 },
       }) as Promise<never>;
     });
 

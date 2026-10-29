@@ -7,12 +7,14 @@ import {
 } from '@aws-sdk/client-sqs';
 import {
   DAILY_IMPORT_LIMIT_USER,
+  MAX_DEFERRED_URLS,
   ROLES,
   TABLE_NAMES,
   canonicalizeUrl,
   deriveDocumentId,
   importCreateSchema,
   type Batch,
+  type DeferredQueue,
   type ImportResult,
   type KnowledgeDocument,
   type RejectedEntry,
@@ -48,6 +50,49 @@ const SQS_BATCH_SIZE = 10;
 // no `stateKey`, so it never surfaces in byOwnerState. Reads/writes use the
 // grants the imports Fn already holds on the documents table (no new GSI/grant).
 const USAGE_PREFIX = 'USAGE#';
+
+// Sentinel prefix for the per-owner deferred-import queue (`DEFERRED#<ownerId>`).
+// Like USAGE/COUNTS it carries no ownerId/stateKey, so it never surfaces in the
+// library GSIs. Holds URLs the daily cap postponed; the scheduled drainer
+// (defer-processor) re-imports them on a later day.
+const DEFERRED_PREFIX = 'DEFERRED#';
+
+function deferredKey(ownerId: string): string {
+  return `${DEFERRED_PREFIX}${ownerId}`;
+}
+
+/**
+ * Append quota-blocked URLs to the owner's deferred queue so a later day's run
+ * can process them automatically — the user never has to re-paste them. Returns
+ * the URLs that did NOT fit (queue already at MAX_DEFERRED_URLS) so the caller
+ * can still hand those back for manual saving (never silently dropped).
+ */
+async function appendDeferred(ownerId: string, urls: string[]): Promise<string[]> {
+  if (urls.length === 0) return [];
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAMES.DOCUMENTS,
+      Key: { documentId: deferredKey(ownerId) },
+    })
+  );
+  const current = ((existing.Item as DeferredQueue | undefined)?.urls ?? []).slice();
+  const room = Math.max(0, MAX_DEFERRED_URLS - current.length);
+  const toStore = urls.slice(0, room);
+  const overflow = urls.slice(room); // queue full — hand these back for manual save
+  if (toStore.length === 0) return overflow;
+
+  const ts = now();
+  const next = [...current, ...toStore];
+  const item: DeferredQueue = {
+    documentId: deferredKey(ownerId),
+    ownerId,
+    urls: next,
+    createdAt: (existing.Item as DeferredQueue | undefined)?.createdAt ?? ts,
+    updatedAt: ts,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE_NAMES.DOCUMENTS, Item: item }));
+  return overflow;
+}
 
 /** UTC calendar day (YYYY-MM-DD) — the quota window, same for every user. */
 function usageDay(): string {
@@ -189,10 +234,14 @@ async function createBatch(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 
   const planned = [...newDocsByCanonical.values()];
   let newDocs = planned;
-  let blocked: string[] = [];
+  // `overLimit` = the new URLs today's quota can't take. They are NOT dropped:
+  // they go to the owner's deferred queue and are processed automatically on a
+  // later day (see defer-processor). Only what won't even fit in that queue is
+  // returned to the user as `blocked` for manual saving.
+  let overLimit: string[] = [];
   if (remaining !== null && planned.length > remaining) {
     newDocs = planned.slice(0, remaining);
-    blocked = planned.slice(remaining).map((d) => d.rawUrl);
+    overLimit = planned.slice(remaining).map((d) => d.rawUrl);
   }
 
   const ts = now();
@@ -250,8 +299,20 @@ async function createBatch(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     await incrementUsageToday(ownerId, pending);
   }
 
-  // Req 3.1: acknowledge the batch within 3s, including the daily-quota outcome
-  // and any URLs the hard block left unprocessed (so the user can save them).
+  // Over-limit URLs are SAVED to the deferred queue for automatic processing on
+  // a later day — the user never re-pastes them. Only what won't fit in the
+  // (bounded) queue is returned as `blocked` for manual saving. `deferred` is
+  // the count the daily drainer will pick up.
+  let blocked: string[] = [];
+  let deferred = 0;
+  if (overLimit.length > 0) {
+    blocked = await appendDeferred(ownerId, overLimit);
+    deferred = overLimit.length - blocked.length;
+  }
+
+  // Req 3.1: acknowledge the batch within 3s, including the daily-quota outcome:
+  // how many were deferred (saved for tomorrow) and any that didn't even fit the
+  // deferred queue (returned so the user can save them manually).
   const result: ImportResult = {
     batchId,
     total: batch.total,
@@ -261,6 +322,7 @@ async function createBatch(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     usedToday,
     remaining: remaining === null ? null : Math.max(0, remaining - pending),
     blocked,
+    deferred,
     duplicates,
   };
   return created(result);

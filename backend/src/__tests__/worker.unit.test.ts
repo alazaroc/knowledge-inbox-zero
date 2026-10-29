@@ -117,6 +117,54 @@ describe('worker — degraded retrieval still produces a recommendation (Req 4.5
     const batch = store.batches.get(BATCH)!;
     expect(batch.completed).toBe(1);
     expect(batch.status).toBe('finished');
+
+    // A degraded-completed doc is counted in the owner's `failed` aggregate so
+    // the library's "Couldn't analyze" chip is correct across all pages.
+    const counts = store.counts.get(`COUNTS#${OWNER}`)!;
+    expect(counts.failed).toBe(1);
+    // It still contributes to total + its state (it produced a recommendation).
+    expect(counts.total).toBe(1);
+  });
+});
+
+// --- Owner `failed` aggregate (the "11 shown but 42 re-analyzed" bug) --------
+describe('worker — the per-owner `failed` count tracks "couldn\'t analyze" docs', () => {
+  it('a hard-failed document increments `failed` and is flagged degraded', async () => {
+    // retrieveReadable throwing drives the worker's catch → markFailed path.
+    retrieveReadable.mockImplementation(() => {
+      throw new Error('forced retrieve failure');
+    });
+
+    const res = await runOne();
+
+    const doc = store.documents.get(DOC)!;
+    expect(doc.status).toBe('failed');
+    // markFailed now flags degraded so the "Couldn't analyze" filter catches it.
+    expect(doc.degraded).toBe(true);
+    // Reported as a batch item failure (SQS redrive semantics).
+    expect(res.batchItemFailures).toHaveLength(1);
+
+    // Counted in `failed`; a hard failure has no state so it never entered total.
+    const counts = store.counts.get(`COUNTS#${OWNER}`)!;
+    expect(counts.failed).toBe(1);
+    expect(counts.total ?? 0).toBe(0);
+  });
+
+  it('a clean completion does NOT increment `failed`', async () => {
+    retrieveReadable.mockResolvedValue({
+      text: 'readable content',
+      degraded: false,
+      metadata: { sourceDomain: 'example.com', publishedAt: '2024-01-01T00:00:00.000Z' },
+    });
+
+    await runOne();
+
+    const doc = store.documents.get(DOC)!;
+    expect(doc.status).toBe('completed');
+    expect(doc.degraded).toBeFalsy();
+    const counts = store.counts.get(`COUNTS#${OWNER}`)!;
+    expect(counts.failed ?? 0).toBe(0);
+    expect(counts.total).toBe(1);
   });
 });
 

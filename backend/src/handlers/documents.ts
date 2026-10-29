@@ -130,13 +130,16 @@ async function readCounts(ownerId: string): Promise<LibraryResponse['counts']> {
       Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
     })
   );
-  const agg = (r.Item ?? {}) as Partial<Record<RecommendationState | 'total', number>>;
+  const agg = (r.Item ?? {}) as Partial<Record<RecommendationState | 'total' | 'failed', number>>;
 
-  const counts = { total: 0 } as LibraryResponse['counts'];
+  const counts = { total: 0, failed: 0 } as LibraryResponse['counts'];
   for (const state of RECOMMENDATION_STATE) {
     counts[state] = typeof agg[state] === 'number' ? agg[state] : 0;
   }
   counts.total = typeof agg.total === 'number' ? agg.total : 0;
+  // Owner-wide count of documents that couldn't be analyzed (degraded). Kept in
+  // the aggregate so the "Couldn't analyze" chip is correct across all pages.
+  counts.failed = typeof agg.failed === 'number' ? Math.max(0, agg.failed) : 0;
   return counts;
 }
 
@@ -324,23 +327,43 @@ async function deleteDocument(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   // Decrement the per-owner COUNTS aggregate: always -1 total, plus -1 on the
   // document's recommendation state when it had one. READ/SKIM/SKIP are passed
   // via ExpressionAttributeNames (READ is a DynamoDB reserved word).
+  // A degraded doc could have been counted in `total` (degraded-completed, which
+  // carries a state) or not (hard-failed, no state). We only touch `total`/state
+  // when it actually contributed to them, but we always decrement `failed` for a
+  // degraded doc so the "Couldn't analyze" count stays correct.
   const priorState = doc.recommendationState;
   const hasState =
     priorState !== undefined && (RECOMMENDATION_STATE as readonly string[]).includes(priorState);
+  const wasDegraded = Boolean(doc.degraded);
 
-  await ddb.send(
-    new UpdateCommand({
-      TableName: TABLE_NAMES.DOCUMENTS,
-      Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
-      UpdateExpression: hasState
-        ? 'ADD #state :neg1, #total :neg1 SET updatedAt = :ts'
-        : 'ADD #total :neg1 SET updatedAt = :ts',
-      ExpressionAttributeNames: hasState
-        ? { '#state': priorState as string, '#total': 'total' }
-        : { '#total': 'total' },
-      ExpressionAttributeValues: { ':neg1': -1, ':ts': now() },
-    })
-  );
+  const names: Record<string, string> = {};
+  const adds: string[] = [];
+  const values: Record<string, unknown> = { ':ts': now() };
+  // Decrement total only when the doc actually contributed to it (terminal docs
+  // with a state do; a hard-failed doc with no state never entered total).
+  if (hasState) {
+    names['#total'] = 'total';
+    names['#state'] = priorState as string;
+    adds.push('#total :neg1', '#state :neg1');
+    values[':neg1'] = -1;
+  }
+  if (wasDegraded) {
+    names['#failed'] = 'failed';
+    adds.push('#failed :fneg1');
+    values[':fneg1'] = -1;
+  }
+
+  if (adds.length > 0) {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAMES.DOCUMENTS,
+        Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
+        UpdateExpression: `ADD ${adds.join(', ')} SET updatedAt = :ts`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    );
+  }
 
   return noContent();
 }
@@ -395,16 +418,27 @@ async function reanalyzeDocument(event: APIGatewayProxyEvent): Promise<APIGatewa
   const wasTerminal = doc.status === 'completed' || doc.status === 'failed';
   const hadState =
     Boolean(priorState) && (RECOMMENDATION_STATE as readonly string[]).includes(priorState!);
-  if (wasTerminal || hadState) {
+  // A degraded doc was counted in `failed`; drop it now so the worker's fresh
+  // run can re-add it only if it degrades again (net zero on a success).
+  const wasDegraded = Boolean(doc.degraded);
+  if (wasTerminal || hadState || wasDegraded) {
     const names: Record<string, string> = {};
     const adds: string[] = [];
+    const values: Record<string, unknown> = { ':ts': now() };
     if (wasTerminal) {
       names['#total'] = 'total';
       adds.push('#total :neg1');
+      values[':neg1'] = -1;
     }
     if (hadState) {
       names['#state'] = priorState as string;
       adds.push('#state :neg1');
+      values[':neg1'] = -1;
+    }
+    if (wasDegraded) {
+      names['#failed'] = 'failed';
+      adds.push('#failed :fneg1');
+      values[':fneg1'] = -1;
     }
     await ddb.send(
       new UpdateCommand({
@@ -412,7 +446,7 @@ async function reanalyzeDocument(event: APIGatewayProxyEvent): Promise<APIGatewa
         Key: { documentId: `COUNTS#${ownerId}` },
         UpdateExpression: `ADD ${adds.join(', ')} SET updatedAt = :ts`,
         ExpressionAttributeNames: names,
-        ExpressionAttributeValues: { ':neg1': -1, ':ts': now() },
+        ExpressionAttributeValues: values,
       })
     );
   }
@@ -604,16 +638,25 @@ async function reanalyzeMany(event: APIGatewayProxyEvent): Promise<APIGatewayPro
       const wasTerminal = doc.status === 'completed' || doc.status === 'failed';
       const hadState =
         Boolean(priorState) && (RECOMMENDATION_STATE as readonly string[]).includes(priorState!);
-      if (wasTerminal || hadState) {
+      const wasDegraded = Boolean(doc.degraded);
+      if (wasTerminal || hadState || wasDegraded) {
         const names: Record<string, string> = {};
         const adds: string[] = [];
+        const values: Record<string, unknown> = { ':ts': ts };
         if (wasTerminal) {
           names['#total'] = 'total';
           adds.push('#total :neg1');
+          values[':neg1'] = -1;
         }
         if (hadState) {
           names['#state'] = priorState as string;
           adds.push('#state :neg1');
+          values[':neg1'] = -1;
+        }
+        if (wasDegraded) {
+          names['#failed'] = 'failed';
+          adds.push('#failed :fneg1');
+          values[':fneg1'] = -1;
         }
         await ddb.send(
           new UpdateCommand({
@@ -621,7 +664,7 @@ async function reanalyzeMany(event: APIGatewayProxyEvent): Promise<APIGatewayPro
             Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
             UpdateExpression: `ADD ${adds.join(', ')} SET updatedAt = :ts`,
             ExpressionAttributeNames: names,
-            ExpressionAttributeValues: { ':neg1': -1, ':ts': ts },
+            ExpressionAttributeValues: values,
           })
         );
       }

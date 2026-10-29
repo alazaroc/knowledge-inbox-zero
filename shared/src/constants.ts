@@ -15,6 +15,12 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 // the unprocessed URLs so the user can save them and retry the next day.
 export const DAILY_IMPORT_LIMIT_USER = 100;
 
+// Max URLs held in a user's deferred queue (links the daily cap postponed to a
+// later day). Bounded so the single `DEFERRED#<ownerId>` item stays small and
+// well under the 400 KB DynamoDB item limit; once full, further excess is
+// returned to the user to save manually (never dropped silently).
+export const MAX_DEFERRED_URLS = 2000;
+
 // Single source of truth for the "About you" / profile context length limit.
 // The SAME number governs: the editable About textarea in the UI, the stored
 // `context` schema bound, and the imported-file snapshot cap. Keeping them in

@@ -127,6 +127,21 @@ export interface RejectedEntry {
   reason: string;
 }
 
+// Per-owner deferred-import queue. Lives in the DOCUMENTS table as a sentinel
+// item (documentId = `DEFERRED#<ownerId>`), alongside the COUNTS/USAGE
+// sentinels. Holds the raw URLs the daily cap postponed; a daily scheduled job
+// drains it (oldest first) back through the normal import path, respecting the
+// new day's quota, and emails the user what it processed. This is how "over the
+// daily limit" links are saved and processed automatically the next day instead
+// of being thrown away.
+export interface DeferredQueue {
+  documentId: string; // `DEFERRED#<ownerId>`
+  ownerId: string;
+  urls: string[]; // raw URLs awaiting a future day's quota (oldest first)
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Response of POST /imports. Beyond the created batch counts it reports the
 // daily-quota outcome so the UI can show a hard-block message plus the exact
 // URLs that were NOT processed (so the user can save them and retry tomorrow).
@@ -139,9 +154,12 @@ export interface ImportResult {
   dailyLimit: number | null;
   usedToday: number; // new docs enqueued today BEFORE this batch
   remaining: number | null; // null when unlimited
-  // URLs accepted-as-valid but NOT enqueued because the daily limit was hit.
-  // The user can copy these and retry the next day.
+  // URLs accepted-as-valid but over today's quota that were SAVED to the
+  // deferred queue — they'll be processed automatically on a later day, no
+  // re-paste needed. `blocked` is only the remainder that didn't even fit the
+  // (bounded) deferred queue, returned so the user can save them manually.
   blocked: string[];
+  deferred?: number; // count saved for automatic processing on a later day
   // URLs accepted that reused an existing document (duplicates); omitted when 0.
   duplicates?: number;
 }
@@ -160,8 +178,12 @@ export interface Batch extends Timestamped {
 }
 
 // Library listing response: a page of documents plus owner-wide state counts.
+// `total` and the per-state counters cover the ANALYZED set; `failed` is the
+// owner-wide number of documents that couldn't be analyzed (degraded), kept in
+// the same O(1) aggregate so the "Couldn't analyze" count is correct regardless
+// of how many pages are loaded (it is NOT derivable from the loaded page).
 export interface LibraryResponse {
   documents: KnowledgeDocument[];
-  counts: Record<RecommendationState, number> & { total: number };
+  counts: Record<RecommendationState, number> & { total: number; failed: number };
   nextCursor?: string;
 }

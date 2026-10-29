@@ -198,6 +198,11 @@ function applyDocumentUpdate(store: InMemoryStore, cmd: UpdateCommand): void {
   if (values[':status'] === 'failed') {
     doc.status = 'failed';
     doc.failureReason = values[':reason'] as string | undefined;
+    // markFailed now also flags the doc degraded so the library's "Couldn't
+    // analyze" category (which keys off `degraded`) includes hard failures.
+    if (values[':degraded'] !== undefined) {
+      doc.degraded = values[':degraded'] as boolean | undefined;
+    }
     return;
   }
 

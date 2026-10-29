@@ -27,7 +27,7 @@ const mockGet = vi.mocked(api.get);
 
 const emptyLibrary: LibraryResponse = {
   documents: [],
-  counts: { READ: 0, SKIM: 0, SKIP: 0, total: 0 },
+  counts: { READ: 0, SKIM: 0, SKIP: 0, total: 0, failed: 0 },
 };
 
 const populatedLibrary: LibraryResponse = {
@@ -47,7 +47,7 @@ const populatedLibrary: LibraryResponse = {
       updatedAt: '2024-01-01T00:00:00.000Z',
     },
   ],
-  counts: { READ: 1, SKIM: 0, SKIP: 0, total: 1 },
+  counts: { READ: 1, SKIM: 0, SKIP: 0, total: 1, failed: 0 },
 };
 
 function renderPage() {
