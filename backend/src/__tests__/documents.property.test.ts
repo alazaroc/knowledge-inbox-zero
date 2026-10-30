@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import fc from 'fast-check';
 import {
   RECOMMENDATION_STATE,
@@ -106,9 +106,13 @@ function installDdb(store: Store): void {
 
       if (IndexName === 'byOwner') {
         // byOwner only surfaces items carrying ownerId: real docs + COUNTS agg.
-        const owned: StoredDoc[] = [...store.docs.values()].filter((d) => d.ownerId === ownerId);
+        let owned: StoredDoc[] = [...store.docs.values()].filter((d) => d.ownerId === ownerId);
+        // The one-time `failed` backfill queries with FilterExpression 'degraded = :t'.
+        if (cmd.input.FilterExpression === 'degraded = :t') {
+          owned = owned.filter((d) => d.degraded === true);
+        }
         const countsAgg = store.counts.get(`COUNTS#${ownerId}`);
-        if (countsAgg) {
+        if (countsAgg && cmd.input.FilterExpression === undefined) {
           // The COUNTS aggregate shares the table and surfaces in byOwner; the
           // handler must filter it out. Model that by including it here.
           owned.push({
@@ -140,7 +144,29 @@ function installDdb(store: Store): void {
         });
       }
 
+      if (IndexName === 'byBatch') {
+        // byBatch: PK batchId; the handler adds FilterExpression ownerId = :o.
+        const batchId = values[':b'];
+        const inBatch = [...store.docs.values()].filter(
+          (d) => d.batchId === batchId && d.ownerId === ownerId
+        );
+        return Promise.resolve({ Items: inBatch });
+      }
+
       throw new Error(`Unexpected QueryCommand index: ${String(IndexName)}`);
+    }
+
+    if (cmd instanceof UpdateCommand) {
+      // Only the one-time `SET failed = :n` backfill is expected from list.
+      const id = (cmd.input.Key as { documentId: string }).documentId;
+      const item = store.counts.get(id) as (CountsItem & { failed?: number }) | undefined;
+      if (!item || item.failed !== undefined) {
+        const err = new Error('conditional') as Error & { name: string };
+        err.name = 'ConditionalCheckFailedException';
+        return Promise.reject(err);
+      }
+      item.failed = (cmd.input.ExpressionAttributeValues as { ':n': number })[':n'];
+      return Promise.resolve({});
     }
 
     throw new Error(`Unexpected DynamoDB command: ${String(cmd)}`);
@@ -339,6 +365,43 @@ describe('documents handler — Property 16: library grouping + pagination integ
 
     const res = await handler(listEvent(OWNER, { cursor: 'not-base64url-json' }));
     expect(res.statusCode).toBe(400);
+  });
+
+  it('?batch= returns every document of that batch even when it is not on the first page', async () => {
+    const store = makeStore();
+    installDdb(store);
+    authAs(OWNER);
+    // 150 older docs fill the first page(s) of the byOwner listing (ordered by
+    // documentId, so the batch doc below sorts AFTER all of them).
+    for (let i = 0; i < 150; i++) {
+      seedDoc(store, OWNER, `a-${String(i).padStart(3, '0')}`, 'SKIP').batchId = 'old-batch';
+    }
+    seedDoc(store, OWNER, 'z-new', 'SKIP').batchId = 'new-batch';
+    // Another owner's doc in the same batch id must never leak.
+    seedDoc(store, 'someone-else', 'z-other', 'SKIP').batchId = 'new-batch';
+
+    const res = await handler(listEvent(OWNER, { batch: 'new-batch' }));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as LibraryResponse;
+    expect(body.documents.map((d) => d.documentId)).toEqual(['z-new']);
+    expect(body.nextCursor).toBeUndefined();
+  });
+
+  it('recounts `failed` once for an aggregate that predates the counter', async () => {
+    const store = makeStore();
+    installDdb(store);
+    authAs(OWNER);
+    seedCounts(store, OWNER, []); // aggregate exists, but has no `failed` field
+    seedDoc(store, OWNER, 'ok-1', 'SKIP');
+    seedDoc(store, OWNER, 'bad-1', 'SKIP').degraded = true;
+    seedDoc(store, OWNER, 'bad-2', 'SKIM').degraded = true;
+    seedDoc(store, 'someone-else', 'bad-x', 'SKIP').degraded = true; // not ours
+
+    const res = await handler(listEvent(OWNER));
+    const body = JSON.parse(res.body) as LibraryResponse;
+    expect(body.counts.failed).toBe(2);
+    // Persisted: the next call reads it from the aggregate (no new recount).
+    expect((store.counts.get(`COUNTS#${OWNER}`) as { failed?: number }).failed).toBe(2);
   });
 
   it('returns zeroed counts and no documents for an owner with no data', async () => {

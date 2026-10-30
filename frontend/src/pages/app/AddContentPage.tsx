@@ -253,8 +253,8 @@ export default function AddContentPage() {
   // sits on the first page. We filter client-side by batchId; no backend change.
   const loadBatchDocs = async (batchId: string) => {
     try {
-      const res = await api.get<LibraryResponse>('/documents');
-      setBatchDocs(res.documents.filter((d) => d.batchId === batchId));
+      const res = await api.get<LibraryResponse>(`/documents?batch=${encodeURIComponent(batchId)}`);
+      setBatchDocs(res.documents);
     } catch {
       // Non-fatal: the counters and the "See your library" link still work.
       setBatchDocs([]);
@@ -825,9 +825,7 @@ function RecentImports({ batches }: { batches: Batch[] | null }) {
                   <Clock className="h-3.5 w-3.5 text-gray-400" />
                   {timeAgo(b.createdAt)} · {count} link{count === 1 ? '' : 's'}
                   {!running && rejected > 0 && (
-                    <span className="text-xs text-gray-400">
-                      ({rejected} rejected)
-                    </span>
+                    <span className="text-xs text-gray-400">({rejected} rejected)</span>
                   )}
                 </span>
                 {running ? (

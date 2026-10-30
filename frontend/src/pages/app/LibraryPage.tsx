@@ -37,8 +37,11 @@ const STATE_STYLES: Record<RecommendationState, { badge: string; accent: string 
   SKIP: { badge: 'bg-slate-200 text-slate-600', accent: 'border-l-slate-400' },
 };
 
-function buildPath(filter: Filter, cursor?: string): string {
+function buildPath(filter: Filter, cursor?: string, batch?: string | null): string {
   const params = new URLSearchParams();
+  // A batch is fetched whole from the server (the paged library order is by
+  // hash, so a client-side batch filter would miss most of its documents).
+  if (batch) params.set('batch', batch);
   // FAILED is a client-only category (degraded docs have no backend state), so
   // it fetches everything and filters locally; ALL also fetches everything.
   if (filter !== 'ALL' && filter !== 'FAILED') params.set('state', filter);
@@ -151,7 +154,7 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<LibraryResponse>(buildPath(f));
+      const res = await api.get<LibraryResponse>(buildPath(f, undefined, batchFilter));
       setDocuments(res.documents);
       setCounts(res.counts);
       setNextCursor(res.nextCursor);
@@ -163,9 +166,10 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
   };
 
   useEffect(() => {
-    // Re-fetch whenever the active filter changes.
+    // Re-fetch whenever the active filter or the batch filter changes.
     void load(filter);
-  }, [filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, batchFilter]);
 
   // #5: restore the scroll position the user left from when they return from a
   // document, WITHOUT the "jump to top, then snap back" flash. The flash came
@@ -364,6 +368,8 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     } else if (filter !== 'ALL') {
       // A state tab never shows degraded docs (their state is not meaningful).
       filtered = filtered.filter((d) => !d.degraded);
+      // A batch is fetched whole (all states), so narrow to the tab's state here.
+      if (batchFilter) filtered = filtered.filter((d) => d.recommendationState === filter);
     }
     // Optional source-site filter (one domain only).
     if (siteFilter) {

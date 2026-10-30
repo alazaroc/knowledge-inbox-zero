@@ -132,6 +132,15 @@ async function readCounts(ownerId: string): Promise<LibraryResponse['counts']> {
   );
   const agg = (r.Item ?? {}) as Partial<Record<RecommendationState | 'total' | 'failed', number>>;
 
+  // One-time backfill: aggregates written before the `failed` counter existed
+  // have no such field, so it would read as 0 while degraded documents exist.
+  // Recount them once from the documents and persist it; from then on the
+  // worker/delete/reanalyze paths keep it exact. The condition keeps a
+  // concurrent ADD from being overwritten.
+  if (r.Item && typeof agg.failed !== 'number') {
+    agg.failed = await backfillFailedCount(ownerId);
+  }
+
   const counts = { total: 0, failed: 0 } as LibraryResponse['counts'];
   for (const state of RECOMMENDATION_STATE) {
     counts[state] = typeof agg[state] === 'number' ? agg[state] : 0;
@@ -141,6 +150,51 @@ async function readCounts(ownerId: string): Promise<LibraryResponse['counts']> {
   // the aggregate so the "Couldn't analyze" chip is correct across all pages.
   counts.failed = typeof agg.failed === 'number' ? Math.max(0, agg.failed) : 0;
   return counts;
+}
+
+/** Count the owner's degraded ("couldn't analyze") documents and store the number. */
+async function backfillFailedCount(ownerId: string): Promise<number> {
+  let failed = 0;
+  let startKey: Record<string, unknown> | undefined;
+  do {
+    const page = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAMES.DOCUMENTS,
+        IndexName: 'byOwner',
+        KeyConditionExpression: 'ownerId = :o',
+        FilterExpression: 'degraded = :t',
+        ExpressionAttributeValues: { ':o': ownerId, ':t': true },
+        ExclusiveStartKey: startKey,
+      })
+    );
+    failed += (page.Items ?? []).filter((d) => !isCountsItem(d as { documentId?: string })).length;
+    startKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (startKey);
+
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAMES.DOCUMENTS,
+        Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
+        UpdateExpression: 'SET #failed = :n',
+        ConditionExpression: 'attribute_exists(documentId) AND attribute_not_exists(#failed)',
+        ExpressionAttributeNames: { '#failed': 'failed' },
+        ExpressionAttributeValues: { ':n': failed },
+      })
+    );
+  } catch (err) {
+    // Someone else (a worker ADD) initialised it first: their value is the truth.
+    if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
+    const again = await ddb.send(
+      new GetCommand({
+        TableName: TABLE_NAMES.DOCUMENTS,
+        Key: { documentId: `${COUNTS_PREFIX}${ownerId}` },
+      })
+    );
+    const v = (again.Item as { failed?: number } | undefined)?.failed;
+    if (typeof v === 'number') return v;
+  }
+  return failed;
 }
 
 async function listDocuments(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -164,6 +218,30 @@ async function listDocuments(event: APIGatewayProxyEvent): Promise<APIGatewayPro
   // Counts always reflect the ENTIRE owned set, independent of the page or the
   // state filter (Req 7.2, 7.3, 7.7).
   const counts = await readCounts(ownerId);
+
+  // ?batch=<id>: return ALL documents of one import batch via the byBatch GSI.
+  // The byOwner listing is ordered by documentId (a hash), NOT by date, so
+  // filtering a batch client-side over the first page misses most of it. A batch
+  // is small (≤500), so we read it whole; ownership is enforced by a filter.
+  if (q.batch) {
+    const inBatch: KnowledgeDocument[] = [];
+    let batchKey: Record<string, unknown> | undefined;
+    do {
+      const page = await ddb.send(
+        new QueryCommand({
+          TableName: TABLE_NAMES.DOCUMENTS,
+          IndexName: 'byBatch',
+          KeyConditionExpression: 'batchId = :b',
+          FilterExpression: 'ownerId = :o',
+          ExpressionAttributeValues: { ':b': q.batch, ':o': ownerId },
+          ExclusiveStartKey: batchKey,
+        })
+      );
+      inBatch.push(...((page.Items ?? []) as KnowledgeDocument[]).filter((d) => !isCountsItem(d)));
+      batchKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (batchKey);
+    return ok({ documents: inBatch, counts } satisfies LibraryResponse);
+  }
 
   // A state filter uses the byOwnerState GSI (SK `<state>#<documentId>`); the
   // unfiltered library uses the byOwner GSI. Both are keyed on ownerId (Req 7.6).
