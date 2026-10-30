@@ -9,6 +9,7 @@ import {
   Search,
   Globe,
   Star,
+  ExternalLink,
   SlidersHorizontal,
   RefreshCw,
   X,
@@ -123,9 +124,7 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
   const [filter, setFilter] = useState<Filter>('ALL');
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [counts, setCounts] = useState<LibraryResponse['counts'] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   // Archived visibility: active-only (default), archived-only, or all together.
   const [archivedView, setArchivedView] = useState<'active' | 'archived' | 'all'>('active');
@@ -147,17 +146,31 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
   // Per-document in-flight lifecycle action (archive/delete) to disable buttons.
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Fetch the first page for the current filter. The shared api client exhausts
-  // its own retries/backoff before throwing (Req 8.12); a throw here is terminal
-  // and surfaces the error + retry control (Req 8.8).
+  // Fetch the WHOLE library for the current filter, following the cursor until
+  // the server has no more pages. The library is sized for tens–hundreds of
+  // docs per user (not thousands), so loading everything up front is cheap and
+  // removes the "Load more" trap entirely: every filter, the free-text search
+  // and a delete all operate over the complete set, so a delete can never leave
+  // a visibly empty list just because the row lived on an unloaded page. The
+  // shared api client exhausts its own retries/backoff before throwing (Req
+  // 8.12); a throw here is terminal and surfaces the error + retry (Req 8.8).
   const load = async (f: Filter) => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<LibraryResponse>(buildPath(f, undefined, batchFilter));
-      setDocuments(res.documents);
-      setCounts(res.counts);
-      setNextCursor(res.nextCursor);
+      const all: KnowledgeDocument[] = [];
+      let cursor: string | undefined;
+      let latestCounts: LibraryResponse['counts'] | null = null;
+      // Hard safety cap so a runaway cursor can never loop forever.
+      for (let page = 0; page < 50; page++) {
+        const res = await api.get<LibraryResponse>(buildPath(f, cursor, batchFilter));
+        all.push(...res.documents);
+        latestCounts = res.counts;
+        cursor = res.nextCursor;
+        if (!cursor) break;
+      }
+      setDocuments(all);
+      setCounts(latestCounts);
     } catch (err) {
       setError((err as Error).message || 'Failed to load your library.');
     } finally {
@@ -201,26 +214,64 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     window.scrollTo(0, y);
   }, [loading]);
 
-  // Remember where we are before opening a document, so returning restores it.
+  // #filters: remember the user's FULL filter context (state tab, archived view,
+  // free-text search, signal/site/topic/label selectors, starred-only) whenever
+  // they leave for a document, and restore it when they come back. The filters
+  // live in component state (not the URL), so a plain back-navigation to
+  // /app/library would otherwise reset every one of them to its default — which
+  // is exactly the "I lose my filter when I delete / go back" complaint. We keep
+  // the snapshot in sessionStorage so it survives the unmount/remount of this
+  // page and is scoped to the tab.
+  const FILTER_KEY = 'library:filters';
   const rememberScroll = () => {
     sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    sessionStorage.setItem(
+      FILTER_KEY,
+      JSON.stringify({
+        filter,
+        archivedView,
+        search,
+        tagFilter,
+        siteFilter,
+        topicFilter,
+        starredOnly,
+        labelFilter,
+      })
+    );
   };
 
-  const loadMore = async () => {
-    if (!nextCursor) return;
-    setLoadingMore(true);
-    setError('');
+  // Restore the saved filter context once, on first mount after returning from a
+  // document. Runs before the first fetch so the right filter is fetched.
+  const filtersRestored = useRef(false);
+  useEffect(() => {
+    if (filtersRestored.current) return;
+    filtersRestored.current = true;
+    const saved = sessionStorage.getItem(FILTER_KEY);
+    if (!saved) return;
+    sessionStorage.removeItem(FILTER_KEY);
     try {
-      const res = await api.get<LibraryResponse>(buildPath(filter, nextCursor));
-      setDocuments((prev) => [...prev, ...res.documents]);
-      setCounts(res.counts);
-      setNextCursor(res.nextCursor);
-    } catch (err) {
-      setError((err as Error).message || 'Failed to load more documents.');
-    } finally {
-      setLoadingMore(false);
+      const s = JSON.parse(saved) as Partial<{
+        filter: Filter;
+        archivedView: 'active' | 'archived' | 'all';
+        search: string;
+        tagFilter: RecommendationTag | null;
+        siteFilter: string | null;
+        topicFilter: string | null;
+        starredOnly: boolean;
+        labelFilter: string | null;
+      }>;
+      if (s.filter) setFilter(s.filter);
+      if (s.archivedView) setArchivedView(s.archivedView);
+      if (typeof s.search === 'string') setSearch(s.search);
+      if ('tagFilter' in s) setTagFilter(s.tagFilter ?? null);
+      if ('siteFilter' in s) setSiteFilter(s.siteFilter ?? null);
+      if ('topicFilter' in s) setTopicFilter(s.topicFilter ?? null);
+      if (typeof s.starredOnly === 'boolean') setStarredOnly(s.starredOnly);
+      if ('labelFilter' in s) setLabelFilter(s.labelFilter ?? null);
+    } catch {
+      // Corrupt snapshot: ignore and keep defaults.
     }
-  };
+  }, []);
 
   // Toggle archived state. Optimistic: update the item in place; archiving does
   // not change the owner-wide counts (the backend leaves COUNTS untouched).
@@ -327,10 +378,11 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     }
   };
 
-  // Hard delete, with confirmation. The backend decrements the owner-wide
-  // counts authoritatively; rather than guess the per-state decrement locally
-  // (which drifts when the doc has no clean state), we re-read the library so
-  // every counter — total and the attention %  — reflects the real state.
+  // Hard delete, with confirmation. The flow the user wants is: stay exactly
+  // where you are and keep reviewing the next one — no redirect, no scroll jump,
+  // no reload. So we drop the row locally and adjust the owner-wide counts in
+  // place (decrement total, and the doc's own state bucket) instead of
+  // re-reading the whole library, which would reset scroll and pagination.
   const deleteDoc = async (doc: KnowledgeDocument) => {
     const ok = window.confirm(
       'This permanently deletes the document. You may re-import it later. Continue?'
@@ -339,10 +391,18 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
     setBusyId(doc.documentId);
     try {
       await api.delete(`/documents/${doc.documentId}`);
-      // Drop the row immediately for a responsive feel, then re-sync counts
-      // (and the list) from the backend so the counters never drift.
       setDocuments((prev) => prev.filter((d) => d.documentId !== doc.documentId));
-      await load(filter);
+      setCounts((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, total: Math.max(0, prev.total - 1) };
+        if (doc.degraded) {
+          next.failed = Math.max(0, (prev.failed ?? 0) - 1);
+        } else if (doc.recommendationState) {
+          const s = doc.recommendationState;
+          next[s] = Math.max(0, prev[s] - 1);
+        }
+        return next;
+      });
     } catch (err) {
       setError((err as Error).message || 'Failed to delete the document.');
     } finally {
@@ -847,12 +907,6 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
               className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
             />
           </div>
-          {search.trim() && nextCursor && (
-            <p className="text-xs text-amber-600">
-              Searching the {documents.length} loaded documents. Click “Load more” below to search
-              the rest.
-            </p>
-          )}
 
           {visibleDocs.length === 0 ? (
             <p className="text-sm text-gray-500">
@@ -876,18 +930,6 @@ export default function LibraryPage({ mode = 'library' }: { mode?: 'library' | '
                 </li>
               ))}
             </ul>
-          )}
-
-          {nextCursor && (
-            <div className="flex justify-center">
-              <button
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-                className="rounded border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {loadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            </div>
           )}
         </>
       )}
@@ -1019,18 +1061,20 @@ function DocumentRow({
   return (
     <div className="relative overflow-hidden rounded-lg">
       {/* Swipe backdrop (mobile only): shows the pending action under the card.
-          Left reveals Re-analyze, then Star past the longer threshold; right
-          reveals Archive, then Delete past the longer threshold. */}
+          The card slides in the drag direction, so the action must sit in the
+          gutter the card UNCOVERS — not under the card itself. Swipe LEFT
+          uncovers the RIGHT gutter (star / re-analyze → justify-end); swipe
+          RIGHT uncovers the LEFT gutter (archive / delete → justify-start). */}
       {revealing && (
         <div
           className={`pointer-events-none absolute inset-0 flex items-center px-5 text-sm font-semibold sm:hidden ${
             revealing === 'star'
-              ? 'justify-start bg-amber-100 text-amber-800'
+              ? 'justify-end bg-amber-100 text-amber-800'
               : revealing === 'reanalyze'
-                ? 'justify-start bg-indigo-100 text-indigo-800'
+                ? 'justify-end bg-indigo-100 text-indigo-800'
                 : revealing === 'archive'
-                  ? 'justify-end bg-sky-100 text-sky-800'
-                  : 'justify-end bg-red-100 text-red-700'
+                  ? 'justify-start bg-sky-100 text-sky-800'
+                  : 'justify-start bg-red-100 text-red-700'
           }`}
           aria-hidden="true"
         >
@@ -1144,6 +1188,20 @@ function DocumentRow({
         <div className="mt-2 flex items-center justify-between gap-3">
           {mkv !== null ? <MkvBadge value={mkv} /> : <span />}
           <div className="hidden items-center gap-1 sm:flex">
+            {/* Open the ORIGINAL article in a new tab, straight from the list —
+                so the user can check what a link is without opening the detail
+                page and then having to navigate back. A button (not an <a>)
+                because this row is itself a <Link> and <a> cannot nest in <a>. */}
+            <button
+              type="button"
+              onClick={stop(() =>
+                window.open(doc.canonicalUrl || doc.rawUrl, '_blank', 'noopener,noreferrer')
+              )}
+              title="Open the original article in a new tab"
+              className="inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open
+            </button>
             <button
               type="button"
               onClick={stop(onToggleStar)}
@@ -1202,8 +1260,19 @@ function DocumentRow({
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </button>
           </div>
-          {/* Mobile hint that swipe is available. */}
-          <span className="text-[0.65rem] text-gray-300 sm:hidden">swipe ↔</span>
+          {/* Mobile: quick "open original" + a hint that swipe is available. */}
+          <div className="flex items-center gap-3 sm:hidden">
+            <button
+              type="button"
+              onClick={stop(() =>
+                window.open(doc.canonicalUrl || doc.rawUrl, '_blank', 'noopener,noreferrer')
+              )}
+              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open
+            </button>
+            <span className="text-[0.65rem] text-gray-300">swipe ↔</span>
+          </div>
         </div>
       </Link>
     </div>
